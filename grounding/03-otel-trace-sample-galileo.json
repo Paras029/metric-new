@@ -1,0 +1,529 @@
+{
+  "_comment": "Galileo turn-structured conversation span format (published, PII-sanitized). 1 session per conversation; 1 trace per user-agent turn; spans ordered llm(user_message) then tool/workflow. gen_ai.* + resource.* attributes are carried on trace_attributes and per-span attributes. LLM span input/output are structured {role,content} Messages.",
+  "_grounding_note": "This is the real telemetry envelope available from the production Decagon voicebot via Galileo. It is the authoritative reference for what a trace-first GroundTruthResolver can actually bind against. Key observation: there is NO first-class step_id / turn_id / state-variable attribute. Runtime state is recoverable only from (a) workflow span names, (b) set_metadata policy_input pairs, (c) tool-call input dicts which embed counters and checkpoints, and (d) tool outputs such as {\"match\": ...}.",
+  "project": "DecagonxGalileo",
+  "org": "amex-gs-d",
+  "log_stream": "e2-turn-restructure",
+  "session_external_id": "70871984-b053-4448-9b01-6ca57c3279ea",
+  "session_linked_by": "gen_ai.conversation.id",
+  "trace_count": 6,
+  "span_total": 21,
+  "turns": [
+    {
+      "trace_name": "70871984-b053-4448-9b01-6ca57c3279ea:turn:0",
+      "trace_attributes": {
+        "conversation_id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "session_id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "call_sid": "CAac71b3a242e20c6931606403b22548fa",
+        "amex_uuid": "01SUE4NCN8D2D38AJJPAR55AES00HM2V",
+        "channel_type": "voice",
+        "language": "english",
+        "event_source": "decagon_export",
+        "resource.service.name": "decagon-voicebot-bridge",
+        "resource.service.namespace": "amex",
+        "resource.conversation.env": "staging",
+        "trace_mode": "turn",
+        "galileo_turn_id": "0",
+        "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "decagon.trace_id": "d49712ae8062aeee78ff4a9f5c57ef9e"
+      },
+      "span_count": 3,
+      "spans": [
+        {
+          "step": 1,
+          "type": "tool",
+          "name": "start_session",
+          "attributes": {
+            "event_type": "audit_api",
+            "audit_text": "Hit /startSession",
+            "endpoint_url": "https://apigwm-qa.americanexpress.com/servicing/v1/voicebots/startSession",
+            "tool": "start_session",
+            "correlation_id": "84d14caf-d2e3-4bfb-9ed9-4e33ab5a69e4",
+            "status": "200",
+            "latency_ms": "380",
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea"
+          },
+          "input": "{\"callerPhoneNumber\": \"<redacted>\", \"tfn\": \"<redacted:phone>\"}",
+          "output": "{\"response\": {\"message\": \"Session started successfully\"}, \"status\": 200}",
+          "status_code": 200,
+          "tool_call_id": "84d14caf-d2e3-4bfb-9ed9-4e33ab5a69e4"
+        },
+        {
+          "step": 2,
+          "type": "tool",
+          "name": "check_ANI",
+          "attributes": {
+            "event_type": "audit_api",
+            "audit_text": "Hit /identifyCustomerByAni",
+            "endpoint_url": "https://apigwm-qa.americanexpress.com/servicing/v1/voicebots/identifyCustomerByAni",
+            "tool": "check_ANI",
+            "correlation_id": "3572e870-a2cf-46f2-9018-4a8dbbc0a2b8",
+            "status": "200",
+            "latency_ms": "127",
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea"
+          },
+          "input": "{\"callerPhoneNumber\": \"<redacted>\", \"tfn\": \"<redacted:phone>\"}",
+          "output": "{\"response\": {\"status\": \"PROFILE_NO_MATCH\"}, \"status\": 200}",
+          "status_code": 200,
+          "tool_call_id": "3572e870-a2cf-46f2-9018-4a8dbbc0a2b8"
+        },
+        {
+          "step": 3,
+          "type": "tool",
+          "name": "initialize_session",
+          "attributes": {
+            "event_type": "audit_tool",
+            "audit_text": "Used tool initialize_session in automation",
+            "tool": "initialize_session",
+            "tool_execution_time": "0.67",
+            "code_execution_time": "0.51",
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea"
+          },
+          "input": "{\"_mock\": null, \"_transactions\": null, \"amex_caller\": null, \"amex_client_id\": \"[REDACTED]\", \"amex_client_id_prod\": \"[REDACTED]\", \"amex_client_secret\": \"[REDACTED]\", \"amex_client_secret_prod\": \"[REDACTED]\", \"caller\": \"<redacted>\", \"channel_type\": \"voice\", \"decagon_phone_number\": null, \"enable_encryption\": null, \"force_id\": null, \"is_test\": null, \"sip_from\": \"<redacted>\", \"sip_to\": \"<redacted>\", \"us…",
+          "output": "{\"session\": {\"action\": \"SESSION_STARTED\", \"session_id\": \"70871984-b<redacted:phone>b01-6ca57c3279ea\", \"uuid\": \"01SUE4NCN8D2D38AJJPAR55AES00HM2V\"}, \"ani_match\": \"PROFILE_NO_MATCH\"}",
+          "status_code": 0,
+          "tool_call_id": null
+        }
+      ]
+    },
+    {
+      "trace_name": "70871984-b053-4448-9b01-6ca57c3279ea:turn:1",
+      "trace_attributes": {
+        "conversation_id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "session_id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "call_sid": "CAac71b3a242e20c6931606403b22548fa",
+        "amex_uuid": "01SUE4NCN8D2D38AJJPAR55AES00HM2V",
+        "channel_type": "voice",
+        "language": "english",
+        "event_source": "decagon_export",
+        "resource.service.name": "decagon-voicebot-bridge",
+        "resource.service.namespace": "amex",
+        "resource.conversation.env": "staging",
+        "trace_mode": "turn",
+        "galileo_turn_id": "1",
+        "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "decagon.trace_id": "d49712ae8062aeee78ff4a9f5c57ef9e"
+      },
+      "span_count": 5,
+      "spans": [
+        {
+          "step": 1,
+          "type": "llm",
+          "name": "user_message",
+          "attributes": {
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea",
+            "galileo_turn_id": "1"
+          },
+          "input": null,
+          "output": {
+            "role": "assistant",
+            "content": "Hi! Thanks for calling American Express Account Protection. I’m an AI assistant here to help with your account. This call may be recorded, monitored, and analyzed for compliance and to improve our systems. Are you calling in response to a fraud alert on your account? "
+          },
+          "status_code": 0,
+          "tool_call_id": null
+        },
+        {
+          "step": 2,
+          "type": "workflow",
+          "name": "User Identification",
+          "attributes": {
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea",
+            "event_type": "audit_workflow"
+          },
+          "input": "Selected AOP User Identification",
+          "output": null,
+          "status_code": 0,
+          "tool_call_id": null
+        },
+        {
+          "step": 3,
+          "type": "tool",
+          "name": "set_metadata",
+          "attributes": {
+            "event_type": "audit_tool",
+            "audit_text": "Used tool set_metadata",
+            "tool": "set_metadata",
+            "flow_run_id": "fr_3FJnovgj7FPV50EI6nPn28F5vGn",
+            "used_cache": "False",
+            "tool_execution_time": "0.08",
+            "code_execution_time": "0.0",
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea"
+          },
+          "input": "{\"policy_input\": [\"check_fullssn_or_cm15_called\", \"true\"]}",
+          "output": null,
+          "status_code": 0,
+          "tool_call_id": "fr_3FJnovgj7FPV50EI6nPn28F5vGn"
+        },
+        {
+          "step": 4,
+          "type": "tool",
+          "name": "dtmf_tool",
+          "attributes": {
+            "event_type": "audit_tool",
+            "audit_text": "Used tool dtmf_tool",
+            "tool": "dtmf_tool",
+            "flow_run_id": "fr_3FJnovgj7FPV50EI6nPn28F5vGn",
+            "used_cache": "False",
+            "tool_execution_time": "0.08",
+            "code_execution_time": "0.0",
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea"
+          },
+          "input": "{\"channel_type\": \"voice\"}",
+          "output": null,
+          "status_code": 0,
+          "tool_call_id": "fr_3FJnovgj7FPV50EI6nPn28F5vGn"
+        },
+        {
+          "step": 5,
+          "type": "tool",
+          "name": "check_fullssn_or_cm15",
+          "attributes": {
+            "event_type": "audit_tool",
+            "audit_text": "Used tool check_fullssn_or_cm15",
+            "tool": "check_fullssn_or_cm15",
+            "flow_run_id": "fr_3FJnovgj7FPV50EI6nPn28F5vGn",
+            "used_cache": "False",
+            "tool_execution_time": "0.08",
+            "code_execution_time": "0.0",
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea"
+          },
+          "input": "{\"check_fullssn_or_cm15_response\": null, \"no_user_pref_counter\": null, \"numeric_input\": \"\", \"user_response\": \"\"}",
+          "output": "{\"match\": \"NO_USER_RESPONSE\"}",
+          "status_code": 0,
+          "tool_call_id": "fr_3FJnovgj7FPV50EI6nPn28F5vGn"
+        }
+      ]
+    },
+    {
+      "trace_name": "70871984-b053-4448-9b01-6ca57c3279ea:turn:2",
+      "trace_attributes": {
+        "conversation_id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "session_id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "call_sid": "CAac71b3a242e20c6931606403b22548fa",
+        "amex_uuid": "01SUE4NCN8D2D38AJJPAR55AES00HM2V",
+        "channel_type": "voice",
+        "language": "english",
+        "event_source": "decagon_export",
+        "resource.service.name": "decagon-voicebot-bridge",
+        "resource.service.namespace": "amex",
+        "resource.conversation.env": "staging",
+        "trace_mode": "turn",
+        "galileo_turn_id": "2",
+        "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "decagon.trace_id": "d49712ae8062aeee78ff4a9f5c57ef9e"
+      },
+      "span_count": 3,
+      "spans": [
+        {
+          "step": 1,
+          "type": "llm",
+          "name": "user_message",
+          "attributes": {
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea",
+            "galileo_turn_id": "2"
+          },
+          "input": [
+            {
+              "role": "user",
+              "content": "Yes."
+            }
+          ],
+          "output": {
+            "role": "assistant",
+            "content": "To move forward, I’ll need either your full social security number or your fifteen digit American "
+          },
+          "status_code": 0,
+          "tool_call_id": null
+        },
+        {
+          "step": 2,
+          "type": "workflow",
+          "name": "User Identification",
+          "attributes": {
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea",
+            "event_type": "audit_workflow"
+          },
+          "input": "Selected AOP User Identification",
+          "output": null,
+          "status_code": 0,
+          "tool_call_id": null
+        },
+        {
+          "step": 3,
+          "type": "tool",
+          "name": "check_fullssn_or_cm15",
+          "attributes": {
+            "event_type": "audit_tool",
+            "audit_text": "Used tool check_fullssn_or_cm15",
+            "tool": "check_fullssn_or_cm15",
+            "flow_run_id": "fr_3FJnqRycRmvxxzS4nzEdLvxUIXf",
+            "used_cache": "False",
+            "tool_execution_time": "0.09",
+            "code_execution_time": "0.0",
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea"
+          },
+          "input": "{\"check_fullssn_or_cm15_response\": null, \"no_user_pref_counter\": null, \"numeric_input\": \"\", \"user_response\": \"NO_PREFERENCE_SHARED\"}",
+          "output": "{\"match\": \"NO_PREFERENCE_SHARED\"}",
+          "status_code": 0,
+          "tool_call_id": "fr_3FJnqRycRmvxxzS4nzEdLvxUIXf"
+        }
+      ]
+    },
+    {
+      "trace_name": "70871984-b053-4448-9b01-6ca57c3279ea:turn:3",
+      "trace_attributes": {
+        "conversation_id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "session_id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "call_sid": "CAac71b3a242e20c6931606403b22548fa",
+        "amex_uuid": "01SUE4NCN8D2D38AJJPAR55AES00HM2V",
+        "channel_type": "voice",
+        "language": "english",
+        "event_source": "decagon_export",
+        "resource.service.name": "decagon-voicebot-bridge",
+        "resource.service.namespace": "amex",
+        "resource.conversation.env": "staging",
+        "trace_mode": "turn",
+        "galileo_turn_id": "3",
+        "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "decagon.trace_id": "d49712ae8062aeee78ff4a9f5c57ef9e"
+      },
+      "span_count": 8,
+      "spans": [
+        {
+          "step": 1,
+          "type": "llm",
+          "name": "user_message",
+          "attributes": {
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea",
+            "galileo_turn_id": "3"
+          },
+          "input": [
+            {
+              "role": "user",
+              "content": "Five Centimeters fifteen, please. Five Centimeters fifteen, please."
+            }
+          ],
+          "output": {
+            "role": "assistant",
+            "content": "One moment please. I wasn’t able to catch which one you’d rather share. "
+          },
+          "status_code": 0,
+          "tool_call_id": null
+        },
+        {
+          "step": 2,
+          "type": "workflow",
+          "name": "User Identification",
+          "attributes": {
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea",
+            "event_type": "audit_workflow"
+          },
+          "input": "Selected AOP User Identification",
+          "output": null,
+          "status_code": 0,
+          "tool_call_id": null
+        },
+        {
+          "step": 3,
+          "type": "tool",
+          "name": "dtmf_tool",
+          "attributes": {
+            "event_type": "audit_tool",
+            "audit_text": "Used tool dtmf_tool",
+            "tool": "dtmf_tool",
+            "flow_run_id": "fr_3FJnrhqvwgqfaK9b1GtIPBIFnii",
+            "used_cache": "False",
+            "tool_execution_time": "0.08",
+            "code_execution_time": "0.0",
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea"
+          },
+          "input": "{\"channel_type\": \"voice\"}",
+          "output": null,
+          "status_code": 0,
+          "tool_call_id": "fr_3FJnrhqvwgqfaK9b1GtIPBIFnii"
+        },
+        {
+          "step": 4,
+          "type": "tool",
+          "name": "check_fullssn_or_cm15",
+          "attributes": {
+            "event_type": "audit_tool",
+            "audit_text": "Used tool check_fullssn_or_cm15",
+            "tool": "check_fullssn_or_cm15",
+            "flow_run_id": "fr_3FJnrhqvwgqfaK9b1GtIPBIFnii",
+            "used_cache": "False",
+            "tool_execution_time": "0.08",
+            "code_execution_time": "0.0",
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea"
+          },
+          "input": "{\"check_fullssn_or_cm15_response\": null, \"no_user_pref_counter\": 1, \"numeric_input\": \"\", \"user_response\": \"NO_PREFERENCE_SHARED\"}",
+          "output": "{\"match\": \"UNKNOWN\"}",
+          "status_code": 0,
+          "tool_call_id": "fr_3FJnrhqvwgqfaK9b1GtIPBIFnii"
+        },
+        {
+          "step": 5,
+          "type": "tool",
+          "name": "set_metadata",
+          "attributes": {
+            "event_type": "audit_tool",
+            "audit_text": "Used tool set_metadata",
+            "tool": "set_metadata",
+            "flow_run_id": "fr_3FJnrhqvwgqfaK9b1GtIPBIFnii",
+            "used_cache": "False",
+            "tool_execution_time": "0.08",
+            "code_execution_time": "0.0",
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea"
+          },
+          "input": "{\"policy_input\": [\"checkpoint\", \"check14Key\"]}",
+          "output": null,
+          "status_code": 0,
+          "tool_call_id": "fr_3FJnrhqvwgqfaK9b1GtIPBIFnii"
+        },
+        {
+          "step": 6,
+          "type": "tool",
+          "name": "check_14key",
+          "attributes": {
+            "event_type": "audit_tool",
+            "audit_text": "Used tool check_14key",
+            "tool": "check_14key",
+            "flow_run_id": "fr_3FJnrhqvwgqfaK9b1GtIPBIFnii",
+            "used_cache": "False",
+            "tool_execution_time": "0.08",
+            "code_execution_time": "0.0",
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea"
+          },
+          "input": "{\"_14Key_unsure\": null, \"_14key_api_response\": null, \"_14key_frozen\": null, \"_14key_input_error\": 0, \"_14key_searching_counter\": null, \"_15cm_api_response\": null, \"_4ssn_api_response\": null, \"_5cm_api_response\": null, \"amex_client_id\": \"[REDACTED]\", \"amex_client_id_prod\": \"[REDACTED]\", \"amex_client_secret\": \"[REDACTED]\", \"amex_client_secret_prod\": \"[REDACTED]\", \"checkpoint_14key\": \"\", \"enable_encr…",
+          "output": "{\"match\": \"NO_USER_RESPONSE\"}",
+          "status_code": 0,
+          "tool_call_id": "fr_3FJnrhqvwgqfaK9b1GtIPBIFnii"
+        },
+        {
+          "step": 7,
+          "type": "tool",
+          "name": "set_metadata",
+          "attributes": {
+            "event_type": "audit_tool",
+            "audit_text": "Used tool set_metadata",
+            "tool": "set_metadata",
+            "flow_run_id": "fr_3FJnrhqvwgqfaK9b1GtIPBIFnii",
+            "used_cache": "False",
+            "tool_execution_time": "0.08",
+            "code_execution_time": "0.0",
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea"
+          },
+          "input": "{\"policy_input\": [\"checkpoint_14key\", \"4SSN\"]}",
+          "output": null,
+          "status_code": 0,
+          "tool_call_id": "fr_3FJnrhqvwgqfaK9b1GtIPBIFnii"
+        },
+        {
+          "step": 8,
+          "type": "tool",
+          "name": "dtmf_4ssn",
+          "attributes": {
+            "event_type": "audit_tool",
+            "audit_text": "Used tool dtmf_4ssn",
+            "tool": "dtmf_4ssn",
+            "flow_run_id": "fr_3FJnrhqvwgqfaK9b1GtIPBIFnii",
+            "used_cache": "False",
+            "tool_execution_time": "0.08",
+            "code_execution_time": "0.0",
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea"
+          },
+          "input": "{\"channel_type\": \"voice\"}",
+          "output": null,
+          "status_code": 0,
+          "tool_call_id": "fr_3FJnrhqvwgqfaK9b1GtIPBIFnii"
+        }
+      ]
+    },
+    {
+      "trace_name": "70871984-b053-4448-9b01-6ca57c3279ea:turn:4",
+      "trace_attributes": {
+        "conversation_id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "session_id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "call_sid": "CAac71b3a242e20c6931606403b22548fa",
+        "amex_uuid": "01SUE4NCN8D2D38AJJPAR55AES00HM2V",
+        "channel_type": "voice",
+        "language": "english",
+        "event_source": "decagon_export",
+        "resource.service.name": "decagon-voicebot-bridge",
+        "resource.service.namespace": "amex",
+        "resource.conversation.env": "staging",
+        "trace_mode": "turn",
+        "galileo_turn_id": "4",
+        "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "decagon.trace_id": "d49712ae8062aeee78ff4a9f5c57ef9e"
+      },
+      "span_count": 1,
+      "spans": [
+        {
+          "step": 1,
+          "type": "llm",
+          "name": "user_message",
+          "attributes": {
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea",
+            "galileo_turn_id": "4"
+          },
+          "input": [
+            {
+              "role": "user",
+              "content": "My god number."
+            }
+          ],
+          "output": {
+            "role": "assistant",
+            "content": "I’ll need the last four digits of your social security number. Can you say those now? "
+          },
+          "status_code": 0,
+          "tool_call_id": null
+        }
+      ]
+    },
+    {
+      "trace_name": "70871984-b053-4448-9b01-6ca57c3279ea:turn:5",
+      "trace_attributes": {
+        "conversation_id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "session_id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "call_sid": "CAac71b3a242e20c6931606403b22548fa",
+        "amex_uuid": "01SUE4NCN8D2D38AJJPAR55AES00HM2V",
+        "channel_type": "voice",
+        "language": "english",
+        "event_source": "decagon_export",
+        "resource.service.name": "decagon-voicebot-bridge",
+        "resource.service.namespace": "amex",
+        "resource.conversation.env": "staging",
+        "trace_mode": "turn",
+        "galileo_turn_id": "5",
+        "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea",
+        "decagon.trace_id": "d49712ae8062aeee78ff4a9f5c57ef9e"
+      },
+      "span_count": 1,
+      "spans": [
+        {
+          "step": 1,
+          "type": "llm",
+          "name": "user_message",
+          "attributes": {
+            "gen_ai.conversation.id": "70871984-b053-4448-9b01-6ca57c3279ea",
+            "galileo_turn_id": "5"
+          },
+          "input": [
+            {
+              "role": "user",
+              "content": "Bye. I think something went wrong. Green."
+            }
+          ],
+          "output": {
+            "role": "assistant",
+            "content": ""
+          },
+          "status_code": 0,
+          "tool_call_id": null
+        }
+      ]
+    }
+  ]
+}
