@@ -1,0 +1,55 @@
+[project]
+name = "metric"
+version = "0.1.0"
+description = "Ontology-driven ingestion and evaluation for governed conversational agents"
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# Each reader imports its parser lazily, so a missing package disables one
+# format rather than the whole pipeline.
+pdf = ["pypdf>=4.0"]
+docx = ["python-docx>=1.1"]
+xlsx = ["openpyxl>=3.1"]
+image = ["Pillow>=10.0"]
+readers = ["pypdf>=4.0", "python-docx>=1.1", "openpyxl>=3.1", "Pillow>=10.0"]
+dev = ["pytest>=8.0", "mypy>=1.9", "ruff>=0.4"]
+
+[project.scripts]
+metric = "metric.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+# RUF001/RUF002 flag characters this project handles on purpose: the grounding module's
+# substitution table is a list of the exact code points a PDF mangles, and the prose uses
+# en dashes. Renaming them to their ASCII lookalikes would defeat the module.
+ignore = ["RUF001", "RUF002"]
+
+[[tool.mypy.overrides]]
+# Optional readers and the SDK are imported lazily and may not be installed; yaml ships
+# no inline types. None of them affect the checked surface.
+module = ["yaml", "anthropic", "pypdf", "docx.*", "docx", "openpyxl"]
+ignore_missing_imports = true
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "src"
+packages = ["metric"]

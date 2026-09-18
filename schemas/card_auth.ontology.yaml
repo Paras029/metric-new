@@ -1,0 +1,38 @@
+# Use-case ontology for the card authentication voice bot.
+#
+# An extension may add domain types and relations, and may narrow a core relation's
+# domain or range. It may not widen one -- a use case that contradicts core is a
+# schema bug, and load_schema raises rather than choosing a winner.
+version: 1
+name: card_auth
+
+entity_types:
+  domain:
+    - Customer
+    - System
+
+relations:
+  # New: the journey hands control to something outside it. Core has no relation for
+  # this because "an external system" is not a structural concept the pipeline reasons
+  # about -- it only reasons about what happens up to the handover.
+  - name: TRANSFERS_TO
+    domain: [State, Outcome, Action]
+    range: [System]
+    cardinality: many
+    materiality: high
+    description: control passes to this external system
+
+  - name: AUTHENTICATES
+    domain: [Capability]
+    range: [Customer]
+    cardinality: many
+    description: the capability establishes this party's identity
+
+  # Narrowed: in this journey a tool is only ever called from a state or an action.
+  # Core also allows Capability and Decision; permitting those here would let a tool
+  # call attach to a node with no point in the conversation to attach it to.
+  - name: USES_TOOL
+    domain: [State, Action]
+    range: [Tool]
+    cardinality: many
+    description: the entity invokes this tool

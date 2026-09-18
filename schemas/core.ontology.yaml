@@ -1,0 +1,325 @@
+version: 1
+name: core
+
+# Structural types carry meaning the pipeline itself reasons about: it walks States,
+# compiles Rules into assertions, evaluates Conditions. Their semantics are fixed.
+# Domain types are declared by use-case extensions and are only recorded and linked.
+entity_types:
+  structural:
+    - UseCase
+    - Capability
+    - State
+    - Decision
+    - Outcome
+    - Action
+    - Tool
+    - Turn
+    - Rule
+    - Condition
+    - StateVariable
+    - Value
+    - Persona
+  domain: []
+
+# materiality drives admission strictness: a `high` triple needs a deterministic
+# origin or a second witness before it is admitted.
+# polarity lets a requirement extracted as a prohibition be caught mechanically.
+relations:
+  - name: HAS_CAPABILITY
+    domain: [UseCase]
+    range: [Capability]
+    cardinality: many
+    description: the use case includes this capability
+
+  - name: STARTS_AT
+    domain: [UseCase]
+    range: [State]
+    cardinality: many
+    materiality: high
+    description: an entry state of the journey
+
+  - name: HAS_STATE
+    domain: [Capability]
+    range: [State]
+    cardinality: many
+    description: the state belongs to this capability
+
+  - name: HAS_NEXT_STEP
+    domain: [State]
+    range: [State]
+    cardinality: many
+    materiality: high
+    description: the interaction may move directly from one state to the next
+
+  - name: OFFERS_DECISION
+    domain: [State]
+    range: [Decision]
+    cardinality: many
+    description: the decision may be taken from this state
+
+  - name: HAS_OUTCOME
+    domain: [Decision]
+    range: [Outcome]
+    cardinality: many
+    materiality: high
+    description: a named result the decision can produce
+
+  - name: LEADS_TO
+    domain: [Outcome]
+    range: [State]
+    cardinality: one
+    materiality: high
+    description: the state reached when this outcome occurs
+
+  - name: HAS_OUTCOME_TYPE
+    domain: [State]
+    range: [literal]
+    literal_type: enum
+    enum: [Happy path, Retry, Fallback, Escalation, Termination]
+    cardinality: one
+    description: the category of a terminal state
+
+  - name: IS_TERMINAL
+    domain: [State]
+    range: [literal]
+    literal_type: bool
+    cardinality: one
+    materiality: high
+    description: no automated step follows this state
+
+  - name: USES_TOOL
+    domain: [Capability, Decision, State, Action]
+    range: [Tool]
+    cardinality: many
+    description: the entity invokes this tool
+
+  - name: RETURNS
+    domain: [Tool]
+    range: [Outcome]
+    cardinality: many
+    materiality: high
+    description: a result the tool can return
+
+  - name: IS_STATE_CHANGING
+    domain: [Tool]
+    range: [literal]
+    literal_type: bool
+    cardinality: one
+    description: the tool mutates state outside the conversation
+
+  - name: REQUIRES_ACTION
+    domain: [State, Rule]
+    range: [Action]
+    cardinality: many
+    materiality: high
+    description: the action is required at this point
+
+  - name: INVOKES
+    domain: [Action]
+    range: [Tool]
+    cardinality: many
+    description: performing the action calls this tool
+
+  - name: HAS_TURN
+    domain: [State]
+    range: [Turn]
+    cardinality: many
+    description: a conversational turn belonging to this state
+
+  - name: HAS_ACTOR
+    domain: [Turn]
+    range: [literal]
+    literal_type: enum
+    enum: [BOT, CUSTOMER, SYSTEM]
+    cardinality: one
+    description: who speaks
+
+  - name: EXPECTS_OUTCOME
+    domain: [Turn]
+    range: [Outcome]
+    cardinality: many
+    description: the outcome this turn is meant to elicit
+
+  - name: HAS_CANONICAL_TEXT
+    domain: [Turn, Action]
+    range: [literal]
+    literal_type: str
+    cardinality: one
+    description: wording the policy states verbatim
+
+  - name: GENERATION_ALLOWED
+    domain: [Turn, Action]
+    range: [literal]
+    literal_type: bool
+    cardinality: one
+    description: whether paraphrase is permitted; drives the grading mode downstream
+
+  - name: GOVERNED_BY
+    domain: [UseCase, Capability, State, Decision, Tool, Turn, Action]
+    range: [Rule]
+    cardinality: many
+    materiality: high
+    description: the rule constrains this entity
+
+  - name: RULE_REQUIRES
+    domain: [Rule]
+    range: [Action, Outcome, State, Tool]
+    cardinality: many
+    polarity: positive
+    materiality: high
+    description: the rule obliges this
+
+  - name: RULE_FORBIDS
+    domain: [Rule]
+    range: [Action, Outcome, State, Tool]
+    cardinality: many
+    polarity: negative
+    materiality: high
+    description: the rule prohibits this
+
+  - name: RULE_PERMITS
+    domain: [Rule]
+    range: [Action, Outcome, State, Tool]
+    cardinality: many
+    polarity: positive
+    description: the rule allows this without obliging it
+
+  - name: RULE_STATES
+    domain: [Rule]
+    range: [literal]
+    literal_type: str
+    cardinality: one
+    materiality: high
+    description: the rule as the source words it
+
+  - name: HAS_CONDITION
+    domain: [Rule, Outcome]
+    range: [Condition]
+    cardinality: many
+    materiality: high
+    description: the rule or outcome applies only when this holds
+
+  - name: HAS_EXCEPTION
+    domain: [Rule]
+    range: [Condition]
+    cardinality: many
+    materiality: high
+    description: the rule does not apply when this holds
+
+  - name: HAS_SEVERITY
+    domain: [Rule]
+    range: [literal]
+    literal_type: enum
+    enum: [blocker, error, warning, info]
+    cardinality: one
+    description: consequence of violating the rule
+
+  - name: HAS_SCOPE
+    domain: [Rule]
+    range: [literal]
+    literal_type: enum
+    enum: [turn, state, capability, journey, tool]
+    cardinality: one
+    description: the breadth over which the rule holds
+
+  - name: PRECEDES
+    domain: [Action, State, Turn]
+    range: [Action, State, Turn]
+    cardinality: many
+    materiality: high
+    description: the head must occur before the tail
+
+  - name: ON_VARIABLE
+    domain: [Condition]
+    range: [StateVariable]
+    cardinality: one
+    materiality: high
+    description: the variable the condition tests
+
+  - name: OPERATOR
+    domain: [Condition]
+    range: [literal]
+    literal_type: enum
+    enum: [lt, lte, eq, neq, gte, gt, in, exists]
+    cardinality: one
+    materiality: high
+    description: the comparison applied
+
+  - name: COMPARE_TO
+    domain: [Condition]
+    range: [Value]
+    cardinality: one
+    materiality: high
+    description: the value compared against
+
+  - name: HAS_STATE_VARIABLE
+    domain: [UseCase, Capability]
+    range: [StateVariable]
+    cardinality: many
+    description: a runtime variable the journey maintains
+
+  - name: VARIABLE_TYPE
+    domain: [StateVariable]
+    range: [literal]
+    literal_type: enum
+    enum: [int, bool, enum, str]
+    cardinality: one
+    description: the variable's type
+
+  - name: HAS_THRESHOLD
+    domain: [Capability, Decision, Tool, Rule, StateVariable]
+    range: [Value]
+    cardinality: many
+    materiality: high
+    description: a limit governing the entity
+
+  - name: VALUE_IS
+    domain: [Value]
+    range: [literal]
+    literal_type: str
+    cardinality: one
+    materiality: high
+    description: the exact value, recorded verbatim and never normalised
+
+  # Telemetry bindings. Declared here so the vocabulary is complete, but they are
+  # never extracted from policy: no policy names a span attribute. They are proposed
+  # from a telemetry profile and admitted only on human approval.
+  - name: EMITTED_AS_WORKFLOW
+    domain: [Capability]
+    range: [literal]
+    literal_type: str
+    cardinality: many
+    materiality: high
+    description: workflow span name this capability appears as
+
+  - name: EMITTED_AS_TOOL
+    domain: [Tool]
+    range: [literal]
+    literal_type: str
+    cardinality: many
+    materiality: high
+    description: span tool attribute this tool appears as
+
+  - name: EMITTED_AS_RESULT
+    domain: [Outcome]
+    range: [literal]
+    literal_type: str
+    cardinality: many
+    materiality: high
+    description: tool result payload this outcome appears as
+
+  - name: EMITTED_AS_CHECKPOINT
+    domain: [State]
+    range: [literal]
+    literal_type: str
+    cardinality: many
+    materiality: high
+    description: checkpoint key/value this state appears as
+
+  - name: EMITTED_AS_FIELD
+    domain: [StateVariable]
+    range: [literal]
+    literal_type: str
+    cardinality: many
+    materiality: high
+    description: telemetry field name this variable appears as
