@@ -1,0 +1,17 @@
+# The card-authentication workspace: what to ingest, how to read it, what to grade.
+#
+# One file so the CLI and the UI build the same thing. Point `fixture` at a recorded
+# extraction to build offline; remove it to call the model.
+schema: schemas/core.ontology.yaml
+extend: schemas/card_auth.ontology.yaml
+profile: profiles/card_auth.telemetry.yaml
+fixture: fixtures/card_auth.extraction.json
+
+documents:
+  - path: grounding/07-card-authentication-policy.md
+    policy_version: poc-1
+    effective_date: "2026-01-15"
+
+traces:
+  - fixtures/card_auth.trace.json
+  - grounding/03-otel-trace-sample-galileo.json

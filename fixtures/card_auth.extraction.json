@@ -1,0 +1,507 @@
+{
+  "_note": "Recorded pass-B extraction for grounding/07-card-authentication-policy.md. This is what a model said, not a hand-authored graph: every entry still goes through the admission gate, and an entry whose quote cannot be located in the cited passage is rejected exactly as a live response would be.",
+  "entities": [
+    {
+      "surface": "Card Authentication Voice Bot",
+      "type": "UseCase"
+    },
+    {
+      "surface": "customer authentication",
+      "type": "Capability"
+    },
+    {
+      "surface": "Opening and authentication",
+      "type": "State"
+    },
+    {
+      "surface": "Authentication attempts",
+      "type": "State"
+    },
+    {
+      "surface": "Successful authentication",
+      "type": "State"
+    },
+    {
+      "surface": "Failed authentication and retry",
+      "type": "State"
+    },
+    {
+      "surface": "Maximum retry reached",
+      "type": "State"
+    },
+    {
+      "surface": "Transfer and end of automated journey",
+      "type": "State"
+    },
+    {
+      "surface": "authentication result",
+      "type": "Decision"
+    },
+    {
+      "surface": "AUTHENTICATED",
+      "type": "Outcome"
+    },
+    {
+      "surface": "FAILED",
+      "type": "Outcome"
+    },
+    {
+      "surface": "TRANSFERRED",
+      "type": "Outcome"
+    },
+    {
+      "surface": "authenticate_customer",
+      "type": "Tool"
+    },
+    {
+      "surface": "transfer_to_ccp",
+      "type": "Tool"
+    },
+    {
+      "surface": "authentication attempt count",
+      "type": "StateVariable"
+    },
+    {
+      "surface": "3 authentication attempts",
+      "type": "Value"
+    },
+    {
+      "surface": "CCP",
+      "type": "System"
+    }
+  ],
+  "triples": [
+    {
+      "head": "Card Authentication Voice Bot",
+      "head_type": "UseCase",
+      "relation": "HAS_CAPABILITY",
+      "tail": "customer authentication",
+      "tail_type": "Capability",
+      "quote": "This document describes a deliberately simple voice-bot journey for customer authentication."
+    },
+    {
+      "head": "Card Authentication Voice Bot",
+      "head_type": "UseCase",
+      "relation": "STARTS_AT",
+      "tail": "Opening and authentication",
+      "tail_type": "State",
+      "quote": "A. Opening and authentication. Play the required opening statement."
+    },
+    {
+      "head": "customer authentication",
+      "head_type": "Capability",
+      "relation": "HAS_STATE",
+      "tail": "Authentication attempts",
+      "tail_type": "State",
+      "quote": "B. Authentication attempts. Request the information required for authentication and call authenticate_customer."
+    },
+    {
+      "head": "Opening and authentication",
+      "head_type": "State",
+      "relation": "HAS_NEXT_STEP",
+      "tail": "Authentication attempts",
+      "tail_type": "State",
+      "quote": "Call authenticate_customer. Continue only according to the authentication result."
+    },
+    {
+      "head": "Authentication attempts",
+      "head_type": "State",
+      "relation": "OFFERS_DECISION",
+      "tail": "authentication result",
+      "tail_type": "Decision",
+      "quote": "Continue only according to the authentication result."
+    },
+    {
+      "head": "authentication result",
+      "head_type": "Decision",
+      "relation": "HAS_OUTCOME",
+      "tail": "AUTHENTICATED",
+      "tail_type": "Outcome",
+      "quote": "If authenticate_customer returns AUTHENTICATED"
+    },
+    {
+      "head": "authentication result",
+      "head_type": "Decision",
+      "relation": "HAS_OUTCOME",
+      "tail": "FAILED",
+      "tail_type": "Outcome",
+      "quote": "D. Failed authentication and retry. If authentication fails"
+    },
+    {
+      "head": "AUTHENTICATED",
+      "head_type": "Outcome",
+      "relation": "LEADS_TO",
+      "tail": "Successful authentication",
+      "tail_type": "State",
+      "quote": "If authenticate_customer returns AUTHENTICATED, inform the customer that they have been successfully authenticated."
+    },
+    {
+      "head": "FAILED",
+      "head_type": "Outcome",
+      "relation": "LEADS_TO",
+      "tail": "Failed authentication and retry",
+      "tail_type": "State",
+      "quote": "D. Failed authentication and retry. If authentication fails, inform the customer that the authentication was unsuccessful and ask them to try again."
+    },
+    {
+      "head": "Failed authentication and retry",
+      "head_type": "State",
+      "relation": "HAS_NEXT_STEP",
+      "tail": "Authentication attempts",
+      "tail_type": "State",
+      "quote": "The bot may make up to 3 total authentication attempts."
+    },
+    {
+      "head": "Failed authentication and retry",
+      "head_type": "State",
+      "relation": "HAS_NEXT_STEP",
+      "tail": "Maximum retry reached",
+      "tail_type": "State",
+      "quote": "E. Maximum retry reached. If authentication remains unsuccessful after the third attempt"
+    },
+    {
+      "head": "Successful authentication",
+      "head_type": "State",
+      "relation": "HAS_NEXT_STEP",
+      "tail": "Transfer and end of automated journey",
+      "tail_type": "State",
+      "quote": "Then transfer the call to CCP for further servicing."
+    },
+    {
+      "head": "Maximum retry reached",
+      "head_type": "State",
+      "relation": "HAS_NEXT_STEP",
+      "tail": "Transfer and end of automated journey",
+      "tail_type": "State",
+      "quote": "Then transfer the call to CCP."
+    },
+    {
+      "head": "Transfer and end of automated journey",
+      "head_type": "State",
+      "relation": "IS_TERMINAL",
+      "tail": "true",
+      "tail_type": "literal",
+      "quote": "The automated journey ends once the transfer is initiated."
+    },
+    {
+      "head": "Transfer and end of automated journey",
+      "head_type": "State",
+      "relation": "HAS_OUTCOME_TYPE",
+      "tail": "Termination",
+      "tail_type": "literal",
+      "quote": "The automated journey ends once the transfer is initiated."
+    },
+    {
+      "head": "Successful authentication",
+      "head_type": "State",
+      "relation": "HAS_OUTCOME_TYPE",
+      "tail": "Happy path",
+      "tail_type": "literal",
+      "quote": "On successful authentication, inform the customer that authentication was successful and transfer to CCP."
+    },
+    {
+      "head": "Failed authentication and retry",
+      "head_type": "State",
+      "relation": "HAS_OUTCOME_TYPE",
+      "tail": "Retry",
+      "tail_type": "literal",
+      "quote": "inform the customer that the authentication was unsuccessful and ask them to try again"
+    },
+    {
+      "head": "Maximum retry reached",
+      "head_type": "State",
+      "relation": "HAS_OUTCOME_TYPE",
+      "tail": "Fallback",
+      "tail_type": "literal",
+      "quote": "If authentication remains unsuccessful after the third attempt"
+    },
+    {
+      "head": "Authentication attempts",
+      "head_type": "State",
+      "relation": "USES_TOOL",
+      "tail": "authenticate_customer",
+      "tail_type": "Tool",
+      "quote": "Request the information required for authentication and call authenticate_customer."
+    },
+    {
+      "head": "Transfer and end of automated journey",
+      "head_type": "State",
+      "relation": "USES_TOOL",
+      "tail": "transfer_to_ccp",
+      "tail_type": "Tool",
+      "quote": "After successful authentication or after the maximum retry limit is reached, call transfer_to_ccp."
+    },
+    {
+      "head": "authenticate_customer",
+      "head_type": "Tool",
+      "relation": "RETURNS",
+      "tail": "AUTHENTICATED",
+      "tail_type": "Outcome",
+      "quote": "Tool / API: authenticate_customer | When used: For each authentication attempt | Example output: AUTHENTICATED / FAILED"
+    },
+    {
+      "head": "authenticate_customer",
+      "head_type": "Tool",
+      "relation": "RETURNS",
+      "tail": "FAILED",
+      "tail_type": "Outcome",
+      "quote": "Tool / API: authenticate_customer | When used: For each authentication attempt | Example output: AUTHENTICATED / FAILED"
+    },
+    {
+      "head": "transfer_to_ccp",
+      "head_type": "Tool",
+      "relation": "RETURNS",
+      "tail": "TRANSFERRED",
+      "tail_type": "Outcome",
+      "quote": "Tool / API: transfer_to_ccp | When used: After authentication success or max retry | Example output: TRANSFERRED / FAILED"
+    },
+    {
+      "head": "transfer_to_ccp",
+      "head_type": "Tool",
+      "relation": "RETURNS",
+      "tail": "FAILED",
+      "tail_type": "Outcome",
+      "quote": "Tool / API: transfer_to_ccp | When used: After authentication success or max retry | Example output: TRANSFERRED / FAILED"
+    },
+    {
+      "head": "transfer_to_ccp",
+      "head_type": "Tool",
+      "relation": "IS_STATE_CHANGING",
+      "tail": "true",
+      "tail_type": "literal",
+      "quote": "The automated journey ends once the transfer is initiated."
+    },
+    {
+      "head": "customer authentication",
+      "head_type": "Capability",
+      "relation": "HAS_STATE_VARIABLE",
+      "tail": "authentication attempt count",
+      "tail_type": "StateVariable",
+      "quote": "Conversation state: Remember the authentication attempt count and authentication result for the duration of the interaction."
+    },
+    {
+      "head": "authentication attempt count",
+      "head_type": "StateVariable",
+      "relation": "VARIABLE_TYPE",
+      "tail": "int",
+      "tail_type": "literal",
+      "quote": "Maintain an authentication attempt counter."
+    },
+    {
+      "head": "authentication result",
+      "head_type": "Decision",
+      "relation": "HAS_THRESHOLD",
+      "tail": "3 authentication attempts",
+      "tail_type": "Value",
+      "quote": "Retry control: Enforce a hard maximum of 3 authentication attempts."
+    },
+    {
+      "head": "authentication attempt count",
+      "head_type": "StateVariable",
+      "relation": "HAS_THRESHOLD",
+      "tail": "3 authentication attempts",
+      "tail_type": "Value",
+      "quote": "Never exceeds 3 authentication attempts in one interaction."
+    },
+    {
+      "head": "Card Authentication Voice Bot",
+      "head_type": "UseCase",
+      "relation": "GOVERNED_BY",
+      "tail": "The bot must not perform any other servicing activity",
+      "tail_type": "Rule",
+      "quote": "The bot must not perform any other servicing activity."
+    },
+    {
+      "head": "The bot must not perform any other servicing activity",
+      "head_type": "Rule",
+      "relation": "RULE_FORBIDS",
+      "tail": "additional account-specific servicing",
+      "tail_type": "Action",
+      "quote": "The bot must not perform any other servicing activity."
+    },
+    {
+      "head": "The bot must not perform any other servicing activity",
+      "head_type": "Rule",
+      "relation": "HAS_SCOPE",
+      "tail": "journey",
+      "tail_type": "literal",
+      "quote": "No servicing: Do not answer or execute additional account-specific servicing requests in this POC."
+    },
+    {
+      "head": "authentication result",
+      "head_type": "Decision",
+      "relation": "GOVERNED_BY",
+      "tail": "It must not make a fourth attempt",
+      "tail_type": "Rule",
+      "quote": "It must not make a fourth attempt."
+    },
+    {
+      "head": "It must not make a fourth attempt",
+      "head_type": "Rule",
+      "relation": "RULE_FORBIDS",
+      "tail": "make a fourth authentication attempt",
+      "tail_type": "Action",
+      "quote": "It must not make a fourth attempt."
+    },
+    {
+      "head": "It must not make a fourth attempt",
+      "head_type": "Rule",
+      "relation": "HAS_THRESHOLD",
+      "tail": "3 authentication attempts",
+      "tail_type": "Value",
+      "quote": "The bot may make up to 3 total authentication attempts. It must not make a fourth attempt."
+    },
+    {
+      "head": "Card Authentication Voice Bot",
+      "head_type": "UseCase",
+      "relation": "GOVERNED_BY",
+      "tail": "The retry counter must not reset during the same call",
+      "tail_type": "Rule",
+      "quote": "The retry counter must not reset during the same call."
+    },
+    {
+      "head": "Successful authentication",
+      "head_type": "State",
+      "relation": "GOVERNED_BY",
+      "tail": "Grounded outcome: Only tell the customer that authentication succeeded when authenticate_customer returns AUTHENTICATED",
+      "tail_type": "Rule",
+      "quote": "Grounded outcome: Only tell the customer that authentication succeeded when authenticate_customer returns AUTHENTICATED."
+    },
+    {
+      "head": "Grounded outcome: Only tell the customer that authentication succeeded when authenticate_customer returns AUTHENTICATED",
+      "head_type": "Rule",
+      "relation": "RULE_REQUIRES",
+      "tail": "AUTHENTICATED",
+      "tail_type": "Outcome",
+      "quote": "Only tell the customer that authentication succeeded when authenticate_customer returns AUTHENTICATED."
+    },
+    {
+      "head": "Grounded outcome: Only tell the customer that authentication succeeded when authenticate_customer returns AUTHENTICATED",
+      "head_type": "Rule",
+      "relation": "HAS_SEVERITY",
+      "tail": "blocker",
+      "tail_type": "literal",
+      "quote": "Grounded outcome: Only tell the customer that authentication succeeded when authenticate_customer returns AUTHENTICATED."
+    },
+    {
+      "head": "Failed authentication and retry",
+      "head_type": "State",
+      "relation": "GOVERNED_BY",
+      "tail": "Do not guess: If required authentication information is unclear or cannot be understood, treat the attempt as unsuccessful and apply the retry logic",
+      "tail_type": "Rule",
+      "quote": "Do not guess: If required authentication information is unclear or cannot be understood, treat the attempt as unsuccessful and apply the retry logic."
+    },
+    {
+      "head": "Opening and authentication",
+      "head_type": "State",
+      "relation": "PRECEDES",
+      "tail": "Authentication attempts",
+      "tail_type": "State",
+      "quote": "Welcomes the customer before attempting authentication."
+    },
+    {
+      "head": "Successful authentication",
+      "head_type": "State",
+      "relation": "PRECEDES",
+      "tail": "Transfer and end of automated journey",
+      "tail_type": "State",
+      "quote": "Communicates successful authentication before transferring the call."
+    },
+    {
+      "head": "Maximum retry reached",
+      "head_type": "State",
+      "relation": "PRECEDES",
+      "tail": "Transfer and end of automated journey",
+      "tail_type": "State",
+      "quote": "Communicates authentication failure/max retry before transferring the call."
+    },
+    {
+      "head": "Transfer and end of automated journey",
+      "head_type": "State",
+      "relation": "REQUIRES_ACTION",
+      "tail": "transfer the call to CCP",
+      "tail_type": "Action",
+      "quote": "Transfers to CCP after either authentication success or the maximum retry limit."
+    },
+    {
+      "head": "transfer the call to CCP",
+      "head_type": "Action",
+      "relation": "INVOKES",
+      "tail": "transfer_to_ccp",
+      "tail_type": "Tool",
+      "quote": "After successful authentication or after the maximum retry limit is reached, call transfer_to_ccp."
+    },
+    {
+      "head": "Opening and authentication",
+      "head_type": "State",
+      "relation": "HAS_TURN",
+      "tail": "Opening",
+      "tail_type": "Turn",
+      "quote": "Opening: \"Welcome. For your security, I need to authenticate you before we proceed.\""
+    },
+    {
+      "head": "Opening",
+      "head_type": "Turn",
+      "relation": "HAS_CANONICAL_TEXT",
+      "tail": "Welcome. For your security, I need to authenticate you before we proceed.",
+      "tail_type": "literal",
+      "quote": "Opening: \"Welcome. For your security, I need to authenticate you before we proceed.\""
+    },
+    {
+      "head": "Opening",
+      "head_type": "Turn",
+      "relation": "GENERATION_ALLOWED",
+      "tail": "false",
+      "tail_type": "literal",
+      "quote": "Opening: \"Welcome. For your security, I need to authenticate you before we proceed.\""
+    },
+    {
+      "head": "Opening",
+      "head_type": "Turn",
+      "relation": "HAS_ACTOR",
+      "tail": "BOT",
+      "tail_type": "literal",
+      "quote": "Opening: \"Welcome. For your security, I need to authenticate you before we proceed.\""
+    },
+    {
+      "head": "Successful authentication",
+      "head_type": "State",
+      "relation": "HAS_TURN",
+      "tail": "Successful authentication message",
+      "tail_type": "Turn",
+      "quote": "Successful authentication: \"Thank you. You have been successfully authenticated. I will now connect you to CCP for further servicing.\""
+    },
+    {
+      "head": "Successful authentication message",
+      "head_type": "Turn",
+      "relation": "HAS_CANONICAL_TEXT",
+      "tail": "Thank you. You have been successfully authenticated. I will now connect you to CCP for further servicing.",
+      "tail_type": "literal",
+      "quote": "Successful authentication: \"Thank you. You have been successfully authenticated. I will now connect you to CCP for further servicing.\""
+    },
+    {
+      "head": "Successful authentication message",
+      "head_type": "Turn",
+      "relation": "GENERATION_ALLOWED",
+      "tail": "false",
+      "tail_type": "literal",
+      "quote": "Successful authentication: \"Thank you. You have been successfully authenticated. I will now connect you to CCP for further servicing.\""
+    },
+    {
+      "head": "Transfer and end of automated journey",
+      "head_type": "State",
+      "relation": "TRANSFERS_TO",
+      "tail": "CCP",
+      "tail_type": "System",
+      "quote": "CCP handles all further servicing after transfer."
+    },
+    {
+      "head": "customer authentication",
+      "head_type": "Capability",
+      "relation": "AUTHENTICATES",
+      "tail": "the customer",
+      "tail_type": "Customer",
+      "quote": "Authenticate the customer."
+    }
+  ]
+}

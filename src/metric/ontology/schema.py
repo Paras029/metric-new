@@ -18,6 +18,21 @@ import yaml
 from metric.ontology.types import LITERAL_TYPE, Candidate, Materiality
 
 Cardinality = Literal["one", "many"]
+Grouping = Literal["per_triple", "per_head", "all"]
+
+# The assertion kinds a relation may declare. Closed, because each one names a grader
+# that has to exist in code -- a schema may say what a relation checks, not invent a
+# way of checking it.
+CHECK_KINDS = frozenset(
+    {
+        "tool_called", "outcome_allowed", "transition_expected", "transition_allowed",
+        "terminal_expected", "order_expected", "count_limit", "action_required",
+        "action_forbidden", "text_required",
+    }
+)
+CHECK_DIMENSIONS = frozenset(
+    {"outcome", "policy", "state", "trajectory", "tool", "grounding", "communication"}
+)
 Polarity = Literal["positive", "negative", "neutral"]
 LiteralType = Literal["str", "bool", "int", "enum"]
 
@@ -26,6 +41,21 @@ _BOOL_LITERALS = frozenset({"true", "false"})
 
 class SchemaError(Exception):
     """Raised when a schema file is internally inconsistent or extends core illegally."""
+
+
+@dataclass(frozen=True, slots=True)
+class CheckSpec:
+    """What this relation asserts about a live agent.
+
+    Declared beside the relation rather than in a registry keyed by domain rule codes.
+    A use case that adds a relation declares how it is checked in the same file and the
+    same edit; nothing in the evaluator has to learn about it.
+    """
+
+    kind: str
+    dimension: str
+    scope: str
+    grouping: Grouping = "per_triple"
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +69,8 @@ class RelationSpec:
     literal_type: LiteralType | None = None
     enum: frozenset[str] = field(default_factory=frozenset)
     description: str = ""
+    checks: CheckSpec | None = None
+    not_checkable: bool = False
 
     @property
     def takes_literal(self) -> bool:
@@ -63,6 +95,26 @@ class Schema:
 
     def relation(self, name: str) -> RelationSpec | None:
         return self.relations.get(name)
+
+    @property
+    def checked_relations(self) -> tuple[str, ...]:
+        return tuple(sorted(n for n, s in self.relations.items() if s.checks is not None))
+
+    def undeclared(self, relations: frozenset[str]) -> tuple[str, ...]:
+        """Relations that say neither how they are checked nor that they are not.
+
+        Reported rather than assumed: a relation that quietly checks nothing is the
+        difference between a use case that is covered and one that looks covered.
+        """
+        return tuple(
+            sorted(
+                name
+                for name in relations
+                if (spec := self.relations.get(name)) is not None
+                and spec.checks is None
+                and not spec.not_checkable
+            )
+        )
 
     def materiality_of(self, relation: str) -> Materiality:
         spec = self.relations.get(relation)
@@ -199,6 +251,8 @@ def _relation(raw: dict[str, Any], known_types: frozenset[str]) -> RelationSpec:
 
     return RelationSpec(
         name=name,
+        checks=_checks(name, raw.get("checks")),
+        not_checkable=bool(raw.get("not_checkable", False)),
         domain=domain,
         range=range_,
         cardinality=raw.get("cardinality", "many"),
@@ -208,6 +262,31 @@ def _relation(raw: dict[str, Any], known_types: frozenset[str]) -> RelationSpec:
         enum=enum,
         description=str(raw.get("description", "")),
     )
+
+
+def _checks(name: str, raw: Any) -> CheckSpec | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise SchemaError(f"{name}: checks must be a mapping")
+    try:
+        kind, dimension, scope = str(raw["kind"]), str(raw["dimension"]), str(raw["scope"])
+    except KeyError as exc:
+        raise SchemaError(f"{name}: checks is missing {exc.args[0]!r}") from exc
+
+    if kind not in CHECK_KINDS:
+        raise SchemaError(
+            f"{name}: {kind!r} is not a known assertion kind "
+            f"(one of: {', '.join(sorted(CHECK_KINDS))})"
+        )
+    if dimension not in CHECK_DIMENSIONS:
+        raise SchemaError(f"{name}: {dimension!r} is not a known evaluation dimension")
+
+    grouping = str(raw.get("grouping", "per_triple"))
+    if grouping not in {"per_triple", "per_head", "all"}:
+        raise SchemaError(f"{name}: {grouping!r} is not a known grouping")
+
+    return CheckSpec(kind=kind, dimension=dimension, scope=scope, grouping=grouping)  # type: ignore[arg-type]
 
 
 def _extend(core: Schema, data: dict[str, Any], path: Path) -> Schema:

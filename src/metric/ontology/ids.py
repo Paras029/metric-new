@@ -57,6 +57,11 @@ def question_id(kind: str, *parts: str) -> str:
     return _digest(kind, *parts, length=_PASSAGE_ID_LEN)
 
 
+def assertion_id(kind: str, *parts: str) -> str:
+    """Keyed by what is asserted, so the same expectation keeps its id across builds."""
+    return _digest(kind, *parts, length=_PASSAGE_ID_LEN)
+
+
 def passage_id(doc_id: str, location: str, text: str) -> str:
     return _digest(doc_id, location, _normalise_for_hash(text), length=_PASSAGE_ID_LEN)
 

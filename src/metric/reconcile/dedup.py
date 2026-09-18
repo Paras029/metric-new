@@ -16,9 +16,17 @@ are the ones a person sees.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
-from metric.ontology.types import Span, Triple
+from metric.ontology.ids import question_id
+from metric.ontology.types import Span, Triple, TripleStatus
+
+REVIEW_QUESTION = "review/unwitnessed"
+
+
+def review_question_id(triple: Triple) -> str:
+    """The id of the question that asks a person to confirm this triple."""
+    return question_id(REVIEW_QUESTION, *triple.key)
 
 
 def merge(triples: Iterable[Triple]) -> list[Triple]:
@@ -29,13 +37,18 @@ def merge(triples: Iterable[Triple]) -> list[Triple]:
     return [_merged(group) for _, group in sorted(grouped.items())]
 
 
-def apply_witness_bar(triples: Sequence[Triple]) -> list[Triple]:
-    """Move unsupported high-materiality triples to `review`.
+def apply_witness_bar(
+    triples: Sequence[Triple], *, approved: Mapping[str, str] | None = None
+) -> list[Triple]:
+    """Move unsupported high-materiality triples to `review`, unless a person has ruled.
 
-    Leaves every other status alone: a triple already marked conflicted or superseded
-    has been decided on stronger grounds than this.
+    A recorded decision outranks the bar in both directions: an approved triple is
+    admitted and can block, a rejected one leaves the graph. That is the loop closing
+    — the bar is a queue, not a verdict, and without somewhere for the answer to land
+    a single-source policy would produce a graph that can never block anything.
     """
-    return [_bar(triple) for triple in triples]
+    ruled = approved or {}
+    return [_bar(triple, ruled) for triple in triples]
 
 
 def _merged(group: list[Triple]) -> Triple:
@@ -63,13 +76,23 @@ def _merged(group: list[Triple]) -> Triple:
     )
 
 
-def _bar(triple: Triple) -> Triple:
-    if triple.status != "admitted" or triple.materiality != "high":
+def _bar(triple: Triple, ruled: Mapping[str, str]) -> Triple:
+    if triple.status != "admitted":
         return triple
-    if triple.methods != {"llm"}:
+
+    answer = ruled.get(review_question_id(triple), "")
+    if answer == "reject":
+        return _with_status(triple, "rejected")
+    if answer == "approve":
+        return triple
+    if triple.materiality != "high" or triple.methods != {"llm"}:
         return triple
     if len({span.passage_id for span in triple.spans}) > 1:
         return triple
+    return _with_status(triple, "review")
+
+
+def _with_status(triple: Triple, status: TripleStatus) -> Triple:
     return Triple(
         head=triple.head,
         relation=triple.relation,
@@ -78,5 +101,5 @@ def _bar(triple: Triple) -> Triple:
         spans=triple.spans,
         methods=triple.methods,
         materiality=triple.materiality,
-        status="review",
+        status=status,
     )

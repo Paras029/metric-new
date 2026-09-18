@@ -1,23 +1,29 @@
 # metric-new
 
-Ontology-driven ingestion for **Metric 2.0** — MRMG independent testing of GenAI and agentic use
-cases.
+Ontology-driven agent evaluation for **Metric 2.0** — MRMG independent testing of GenAI and agentic
+use cases.
 
-Policy documents go in; an evidence-grounded triple graph comes out, together with everything that
-was rejected and everything still open. The graph is the ground truth a live agent is later tested
-against, which sets the standard: a fact this pipeline invents becomes a test an agent is failed
-for. So it extracts what the source states, cites it, and asks a person about the rest.
+Policy documents go in. An evidence-grounded triple graph comes out, and from that graph: the
+scenarios worth testing, what policy required at any point of a real conversation, and a verdict on
+whether the agent did it — each one traceable to the sentence of policy behind it.
+
+The standard that sets: a fact this pipeline invents becomes a test an agent is failed for. So it
+extracts what the source states, cites it, grades only what the telemetry can actually show, and
+asks a person about the rest.
 
 ## Run it
 
 ```bash
 pip install -e ".[dev]"
 
+metric ui                 # browse the build, review it, grade traces — http://127.0.0.1:8765
+metric evaluate           # the same thing on the command line
 metric schema --schema schemas/core.ontology.yaml --extend schemas/card_auth.ontology.yaml
-metric ingest grounding/07-card-authentication-policy.md \
-  --schema schemas/core.ontology.yaml --extend schemas/card_auth.ontology.yaml \
-  --out build
 ```
+
+`corpus.yaml` says what to ingest, which ontology to read it with, which telemetry profile binds it
+to a live agent, and which traces to grade. It points at a recorded extraction, so the whole thing
+runs offline with no API key; remove `fixture:` to call the model.
 
 The build writes five files to `--out`:
 
@@ -35,14 +41,27 @@ become a new build. Model calls need `ANTHROPIC_API_KEY` or `ant auth login`.
 ## How it works
 
 ```
-documents ─► passages ─► candidates ─► batches + frozen glossary ─► candidates ─► triples ─► graph
-  corpus/    corpus/     extract/       extract/                     extract/     admit/    reconcile/
-                         harvest.py     batching.py, glossary.py     triples.py   gate.py   run.py
-                         deterministic  pass A                       pass B (LLM)
+                          documents ──► passages ──► candidates ──► triples ──► GRAPH
+                           corpus/       corpus/     harvest +      admit/     reconcile/
+                                                     extract/       gate
+                                                                                  │
+                             ┌────────────────────────────────────────────────────┤
+                             ▼                                                    ▼
+                    scenarios (paths)                                    a trace (OTEL)
+                      scenario/                                            trace/ + profile
+                             │                                                    │
+                             └──────────────► EvaluationContract ◄────────────────┘
+                                   resolve_for_scenario | resolve_for_trace
+                                                  contract/
+                                                       │
+                                                       ▼
+                                             verdicts, by dimension
+                                                  evaluate/
 ```
 
-Seven stages. Six are deterministic. Pass B is the only place a model decides anything, and
-everything it produces has to survive the gate.
+One compiler, two entry points. A generated scenario and an observed trace resolve the *same*
+assertions from the *same* graph and differ only in what they narrow to — which is what stops a
+synthetic benchmark drifting away from production evaluation.
 
 | Package | Responsibility |
 |---|---|
@@ -52,7 +71,13 @@ everything it produces has to survive the gate.
 | `llm/` | the single model call, the response cache, prompts built from the active ontology |
 | `admit/` | quote location and the ordered admission criteria |
 | `reconcile/` | merge, the witness bar, typed conflicts, conditional integrity |
-| `graph/`, `reports.py`, `review.py`, `cli.py` | the graph, the outputs, the review loop |
+| `scenario/` | bounded path enumeration, plus a focused path back to every branch it missed |
+| `contract/` | assertions with severity, derivation level and provenance |
+| `trace/` | reading an OTEL export, and binding what it shows to the ontology |
+| `telemetry/` | the profile: what the ontology is called on the wire |
+| `runtime/` | state, counters and order, replayed from a bound trace |
+| `evaluate/` | one grader per assertion kind, and verdicts by dimension |
+| `ui/` | the pages, stdlib server, SVG workflow layout |
 
 The load-bearing ideas, each with the failure it prevents:
 
@@ -70,13 +95,27 @@ The load-bearing ideas, each with the failure it prevents:
   three spans.
 - **Nothing is inferred to make the graph look complete.** An outcome the corpus never routes gets
   a question, not an invented destination.
+- **A relation declares its own check, in the ontology.** `checks: {kind: action_forbidden, …}` sits
+  beside `domain` and `range`, so a new use case declares how its relations are graded in the same
+  edit that introduces them. A relation that declares neither a check nor `not_checkable: true` is
+  reported rather than silently graded by nothing.
+- **Binding is declared, then lexical, then reported.** A telemetry profile says what the ontology is
+  called on the wire. Nothing is guessed: evaluating a trace from a different agent gives 0% binding
+  coverage and no verdicts at all, rather than confident nonsense.
+- **Four verdicts, not two.** `not_applicable` (the situation never arose) and `undecided` (the
+  telemetry cannot show it) are kept apart from pass and fail, because folding either into a pass is
+  how an evaluator comes to look confident about a blind spot.
+- **Nothing blocks until a person approves it.** An expectation resting on a single unreviewed model
+  reading is `advisory` and cannot fail an agent. Approving it in the review queue is what makes it
+  able to.
 
 ## Documents
 
 | Path | What it is |
 |---|---|
 | `design/06-ingestion-v1.md` | the design being built |
-| `design/07-build-notes.md` | where the code departs from that design, and why. **Read this second.** |
+| `design/07-build-notes.md` | where the ingestion code departs from that design, and why |
+| `design/08-scenarios-contracts-evaluation.md` | scenarios, contracts, trace binding, evaluation and the UI. **Read this second.** |
 | `design/01`–`05` | the route there: ontology, failure modes, repo shape, loopholes, GEODE assessment |
 | `grounding/README.md` | index and reading order for the grounding material |
 | `grounding/06-key-findings-scenario-generator-vs-target.md` | gap analysis against the old Scenario Generator, with `file:line` evidence |
@@ -85,7 +124,11 @@ The load-bearing ideas, each with the failure it prevents:
 
 ## Status
 
-The ingestion pipeline runs end to end and is tested against the golden fixture. Not yet built: the
-reproducibility harness, the independent annotation and accuracy gate, the fault injectors, the
-GEODE evaluation, and the UI. `design/07` §6 lists these in the order they matter, and §7 the
-decisions still open.
+Policy to verdict runs end to end and is tested against the working policy, a synthetic run of that
+policy, and a real production trace from a different agent. 138 tests; ruff and `mypy --strict`
+clean.
+
+Not yet built: an ontology and profile for the agent we have real traces of, the independent
+annotation and accuracy gate, enrichment and DOE, a semantic oracle for paraphrase-permitted
+language, fault injection, and the GEODE evaluation. `design/08` §7 lists the known limits and §8 the
+order to take them in.

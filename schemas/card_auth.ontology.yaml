@@ -21,12 +21,20 @@ relations:
     cardinality: many
     materiality: high
     description: control passes to this external system
+    # Declared here rather than in the evaluator: a use-case relation says how it is
+    # checked in the same file that introduces it. Nothing in contract/ changes.
+    checks:
+      kind: action_required
+      dimension: policy
+      scope: journey
+      grouping: per_head
 
   - name: AUTHENTICATES
     domain: [Capability]
     range: [Customer]
     cardinality: many
     description: the capability establishes this party's identity
+    not_checkable: true
 
   # Narrowed: in this journey a tool is only ever called from a state or an action.
   # Core also allows Capability and Decision; permitting those here would let a tool

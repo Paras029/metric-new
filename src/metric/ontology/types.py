@@ -13,7 +13,7 @@ PassageKind = Literal["prose", "table", "list", "heading", "image"]
 Method = Literal["deterministic", "llm", "vision", "human", "telemetry"]
 Materiality = Literal["high", "normal"]
 TailKind = Literal["entity", "literal"]
-TripleStatus = Literal["admitted", "review", "conflicted", "superseded"]
+TripleStatus = Literal["admitted", "review", "rejected", "conflicted", "superseded"]
 
 LITERAL_TYPE = "literal"
 

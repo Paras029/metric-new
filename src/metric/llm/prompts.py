@@ -62,6 +62,8 @@ passages is two triples with two quotes; a fact stated once is one triple. Do no
 restate one fact in several relations to be safe.
 7. A negative statement is a fact. "must not transfer" is a prohibition, not the \
 absence of a permission — extract it with the relation that carries that meaning.
+8. Name a Rule by its own sentence, verbatim. A rule has no other name, and using its \
+sentence is what lets the same rule found in two places be recognised as one rule.
 
 Set `non_normative` to true when the section states no extractable facts at all — a \
 heading block, a table of contents, a revision history, a worked example. That is \

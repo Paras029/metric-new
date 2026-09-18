@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 
 from metric.ontology.schema import Schema, load_schema
+from metric.workspace import BuildSpec, Workspace
 
 REPO = Path(__file__).resolve().parents[1]
 POLICY = REPO / "grounding" / "07-card-authentication-policy.md"
@@ -78,3 +79,16 @@ def card_auth_schema() -> Schema:
 @pytest.fixture(scope="session")
 def policy_path() -> Path:
     return POLICY
+
+
+@pytest.fixture(scope="session")
+def built(tmp_path_factory: pytest.TempPathFactory) -> Workspace:
+    """The card-auth workspace, built once from the recorded extraction."""
+    out = tmp_path_factory.mktemp("build")
+    return Workspace(BuildSpec.from_corpus(REPO / "corpus.yaml", out_dir=out))
+
+
+@pytest.fixture()
+def reviewable(tmp_path: Path) -> Workspace:
+    """A fresh workspace with its own questions file, for tests that answer questions."""
+    return Workspace(BuildSpec.from_corpus(REPO / "corpus.yaml", out_dir=tmp_path))

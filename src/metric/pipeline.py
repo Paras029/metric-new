@@ -12,8 +12,8 @@ same entity named in two documents is one entity.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from metric import __version__
@@ -29,6 +29,7 @@ from metric.llm.gateway import Gateway
 from metric.llm.prompts import prompt_hash
 from metric.ontology.schema import Schema
 from metric.ontology.types import Document, Passage, Question, Rejection
+from metric.telemetry.profile import Profile, apply_profile
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +66,8 @@ class BuildResult:
     manifest: Manifest
     coverage: Coverage
     glossary: Glossary
+    passages: dict[str, Passage] = field(default_factory=dict)
+    profile_problems: tuple[str, ...] = ()
 
 
 def ingest(
@@ -72,6 +75,8 @@ def ingest(
     *,
     schema: Schema,
     gateway: Gateway,
+    decisions: Mapping[str, str] | None = None,
+    profile: Profile | None = None,
 ) -> BuildResult:
     from metric.reconcile.run import reconcile
 
@@ -112,10 +117,17 @@ def ingest(
         admission.triples,
         schema=schema,
         effective_dates=effective_dates,
+        decisions=decisions,
     )
 
+    graph = reconciled.graph
+    profile_problems: tuple[str, ...] = ()
+    if profile is not None:
+        graph, problems = apply_profile(graph, profile)
+        profile_problems = tuple(problems)
+
     return BuildResult(
-        graph=reconciled.graph,
+        graph=graph,
         questions=reconciled.questions,
         rejections=tuple(rejections),
         manifest=manifest,
@@ -126,6 +138,8 @@ def ingest(
             rereads=sum(1 for r in results if r.reread),
         ),
         glossary=glossary,
+        passages=passages,
+        profile_problems=profile_problems,
     )
 
 

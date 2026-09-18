@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -14,6 +15,8 @@ from metric.llm.cache import ResponseCache
 from metric.llm.gateway import AnthropicGateway, Gateway, ModelConfig, ReplayGateway
 from metric.ontology.schema import SchemaError, load_schema
 from metric.pipeline import DocumentSpec, ingest
+from metric.telemetry.profile import ProfileError, load_profile
+from metric.workspace import BuildSpec, Workspace
 
 DEFAULT_CACHE = Path(".metric/llm-cache")
 
@@ -23,7 +26,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.run(args))
-    except (SchemaError, FileNotFoundError, ValueError) as exc:
+    except (SchemaError, ProfileError, FileNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
@@ -53,7 +56,23 @@ def _parser() -> argparse.ArgumentParser:
     )
     ingest_cmd.add_argument("--model", default=ModelConfig().model)
     ingest_cmd.add_argument("--effort", default=ModelConfig().effort)
+    ingest_cmd.add_argument("--profile", type=Path, help="telemetry profile for this use case")
+    ingest_cmd.add_argument(
+        "--fixture", type=Path, help="recorded extraction to build from instead of calling a model"
+    )
     ingest_cmd.set_defaults(run=_run_ingest)
+
+    ui_cmd = sub.add_parser("ui", help="browse the build, review it and grade traces")
+    ui_cmd.add_argument("--corpus", type=Path, default=Path("corpus.yaml"))
+    ui_cmd.add_argument("--out", type=Path, default=Path("build"))
+    ui_cmd.add_argument("--host", default="127.0.0.1")
+    ui_cmd.add_argument("--port", type=int, default=8765)
+    ui_cmd.set_defaults(run=_run_ui)
+
+    eval_cmd = sub.add_parser("evaluate", help="grade traces against the policy graph")
+    eval_cmd.add_argument("--corpus", type=Path, default=Path("corpus.yaml"))
+    eval_cmd.add_argument("--out", type=Path, default=Path("build"))
+    eval_cmd.set_defaults(run=_run_evaluate)
 
     return parser
 
@@ -83,8 +102,12 @@ def _run_ingest(args: argparse.Namespace) -> int:
 
     gateway = _gateway(args)
     decisions = review.read(args.out / reports.QUESTIONS_FILE)
+    profile = load_profile(args.profile) if args.profile else None
 
-    result = ingest(specs, schema=schema, gateway=gateway)
+    answers = {q: d.answer for q, d in decisions.items() if d.answered}
+    result = ingest(
+        specs, schema=schema, gateway=gateway, decisions=answers, profile=profile
+    )
     reports.write_build(result, args.out, decisions=decisions)
 
     open_questions = review.outstanding(result.questions, decisions)
@@ -97,6 +120,43 @@ def _run_ingest(args: argparse.Namespace) -> int:
     if result.coverage.silent:
         print(f"  {len(result.coverage.silent)} batches silent — see {reports.REPORT_FILE}")
     return 0
+
+
+def _run_ui(args: argparse.Namespace) -> int:
+    from metric.ui.server import serve
+
+    serve(_workspace(args), host=args.host, port=args.port)
+    return 0
+
+
+def _run_evaluate(args: argparse.Namespace) -> int:
+    space = _workspace(args)
+    if not space.evaluations:
+        raise ValueError(f"{args.corpus} lists no traces to evaluate")
+
+    for evaluation in space.evaluations:
+        counts = Counter(v.outcome for v in evaluation.verdicts)
+        print(f"{evaluation.contract.binding}")
+        print(
+            f"  {counts.get('pass', 0)} pass, {counts.get('fail', 0)} fail, "
+            f"{counts.get('undecided', 0)} undecided, "
+            f"{counts.get('not_applicable', 0)} not applicable "
+            f"({evaluation.binding_coverage:.0%} of observations bound)"
+        )
+        for verdict in evaluation.failures:
+            print(
+                f"  FAIL [{verdict.assertion.severity}] "
+                f"{verdict.assertion.kind}: {verdict.detail}"
+            )
+        if evaluation.unbound:
+            print(f"  unbound: {', '.join(evaluation.unbound)}")
+    return 0
+
+
+def _workspace(args: argparse.Namespace) -> Workspace:
+    if not args.corpus.exists():
+        raise FileNotFoundError(f"{args.corpus} does not exist")
+    return Workspace(BuildSpec.from_corpus(args.corpus, out_dir=args.out))
 
 
 def _specs(args: argparse.Namespace) -> list[DocumentSpec]:

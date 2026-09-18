@@ -32,7 +32,7 @@ _LIMIT = re.compile(
 )
 
 _MODAL_SEVERITY: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"\b(must not|may not|shall not|cannot|never)\b", re.I), "error"),
+    (re.compile(r"\b(must not|may not|shall not|cannot|do not|does not|never)\b", re.I), "error"),
     (re.compile(r"\b(must|shall|is required to|are required to)\b", re.I), "error"),
     (re.compile(r"\b(should not|ought not)\b", re.I), "warning"),
     (re.compile(r"\b(should|ought to)\b", re.I), "warning"),

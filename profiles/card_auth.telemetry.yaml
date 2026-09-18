@@ -1,0 +1,40 @@
+# What the card-authentication ontology is called in telemetry.
+#
+# Declared by a person, never extracted: no policy document names a span attribute.
+# The left side is the ontology's name for something, the right side is the token the
+# agent actually emits. A different agent running the same policy needs a different
+# file here and nothing else.
+version: 1
+name: card_auth
+use_case: Card Authentication Voice Bot
+
+capabilities:
+  customer authentication: customer authentication
+
+tools:
+  authenticate_customer: authenticate_customer
+  transfer_to_ccp: transfer_to_ccp
+
+outcomes:
+  AUTHENTICATED: AUTHENTICATED
+  FAILED: FAILED
+  TRANSFERRED: TRANSFERRED
+
+# The variable the agent writes its position to. A telemetry artefact, not a policy
+# concept -- the ontology has no reason to know the name of the field an agent uses to
+# narrate where it is, so it is declared here and nowhere else.
+checkpoint_variable: checkpoint
+
+# Checkpoint values. The agent writes these through set_metadata, which is the one
+# place it narrates its own transitions -- without them no transition, ordering or
+# terminal check is observable at all.
+states:
+  Opening and authentication: opening
+  Authentication attempts: authenticating
+  Successful authentication: authenticated
+  Failed authentication and retry: retry
+  Maximum retry reached: max_retry
+  Transfer and end of automated journey: transfer
+
+variables:
+  authentication attempt count: attempt_count

@@ -46,7 +46,13 @@ def evidence_key(question: Question) -> str:
 
 
 def write(path: Path, questions: Sequence[Question], *, decisions: Mapping[str, Decision]) -> None:
-    """Render the queue, carrying forward answers whose evidence is unchanged."""
+    """Render the queue, carrying forward every answer that has ever been given.
+
+    Answered questions stop being asked — approving an expectation resolves the thing
+    that raised it — so the file has to keep decisions whose question is no longer in
+    the queue. Writing only the open ones would make every approval undo itself on the
+    next build, silently.
+    """
     entries = []
     for question in questions:
         key = evidence_key(question)
@@ -75,10 +81,23 @@ def write(path: Path, questions: Sequence[Question], *, decisions: Mapping[str, 
             }
         entries.append(entry)
 
+    asked = {question.id for question in questions}
+    resolved = [
+        {
+            "id": decision.question_id,
+            "evidence_key": decision.evidence_key,
+            "answer": decision.answer,
+            "note": decision.note,
+        }
+        for decision in sorted(decisions.values(), key=lambda d: d.question_id)
+        if decision.question_id not in asked and decision.answered
+    ]
+
     path.parent.mkdir(parents=True, exist_ok=True)
     document = {
         "answers": list(ANSWERS[1:]),
         "questions": entries,
+        "resolved": resolved,
     }
     path.write_text(
         yaml.safe_dump(document, sort_keys=False, allow_unicode=True, width=100),
@@ -93,7 +112,7 @@ def read(path: Path) -> dict[str, Decision]:
         document = yaml.safe_load(handle) or {}
 
     decisions: dict[str, Decision] = {}
-    for entry in document.get("questions") or ():
+    for entry in [*(document.get("questions") or ()), *(document.get("resolved") or ())]:
         answer = str(entry.get("answer") or "").strip().lower()
         if answer not in ANSWERS:
             raise ValueError(

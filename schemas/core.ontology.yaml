@@ -30,6 +30,7 @@ relations:
     range: [Capability]
     cardinality: many
     description: the use case includes this capability
+    not_checkable: true
 
   - name: STARTS_AT
     domain: [UseCase]
@@ -37,12 +38,14 @@ relations:
     cardinality: many
     materiality: high
     description: an entry state of the journey
+    not_checkable: true
 
   - name: HAS_STATE
     domain: [Capability]
     range: [State]
     cardinality: many
     description: the state belongs to this capability
+    not_checkable: true
 
   - name: HAS_NEXT_STEP
     domain: [State]
@@ -50,12 +53,18 @@ relations:
     cardinality: many
     materiality: high
     description: the interaction may move directly from one state to the next
+    checks:
+      kind: transition_allowed
+      dimension: trajectory
+      scope: state
+      grouping: per_head
 
   - name: OFFERS_DECISION
     domain: [State]
     range: [Decision]
     cardinality: many
     description: the decision may be taken from this state
+    not_checkable: true
 
   - name: HAS_OUTCOME
     domain: [Decision]
@@ -63,6 +72,7 @@ relations:
     cardinality: many
     materiality: high
     description: a named result the decision can produce
+    not_checkable: true
 
   - name: LEADS_TO
     domain: [Outcome]
@@ -70,6 +80,10 @@ relations:
     cardinality: one
     materiality: high
     description: the state reached when this outcome occurs
+    checks:
+      kind: transition_expected
+      dimension: trajectory
+      scope: state
 
   - name: HAS_OUTCOME_TYPE
     domain: [State]
@@ -78,6 +92,7 @@ relations:
     enum: [Happy path, Retry, Fallback, Escalation, Termination]
     cardinality: one
     description: the category of a terminal state
+    not_checkable: true
 
   - name: IS_TERMINAL
     domain: [State]
@@ -86,12 +101,22 @@ relations:
     cardinality: one
     materiality: high
     description: no automated step follows this state
+    checks:
+      kind: terminal_expected
+      dimension: outcome
+      scope: journey
+      grouping: all
 
   - name: USES_TOOL
     domain: [Capability, Decision, State, Action]
     range: [Tool]
     cardinality: many
     description: the entity invokes this tool
+    checks:
+      kind: tool_called
+      dimension: tool
+      scope: state
+      grouping: per_head
 
   - name: RETURNS
     domain: [Tool]
@@ -99,6 +124,11 @@ relations:
     cardinality: many
     materiality: high
     description: a result the tool can return
+    checks:
+      kind: outcome_allowed
+      dimension: tool
+      scope: tool
+      grouping: per_head
 
   - name: IS_STATE_CHANGING
     domain: [Tool]
@@ -106,6 +136,7 @@ relations:
     literal_type: bool
     cardinality: one
     description: the tool mutates state outside the conversation
+    not_checkable: true
 
   - name: REQUIRES_ACTION
     domain: [State, Rule]
@@ -113,18 +144,25 @@ relations:
     cardinality: many
     materiality: high
     description: the action is required at this point
+    checks:
+      kind: action_required
+      dimension: policy
+      scope: state
+      grouping: per_head
 
   - name: INVOKES
     domain: [Action]
     range: [Tool]
     cardinality: many
     description: performing the action calls this tool
+    not_checkable: true
 
   - name: HAS_TURN
     domain: [State]
     range: [Turn]
     cardinality: many
     description: a conversational turn belonging to this state
+    not_checkable: true
 
   - name: HAS_ACTOR
     domain: [Turn]
@@ -133,12 +171,14 @@ relations:
     enum: [BOT, CUSTOMER, SYSTEM]
     cardinality: one
     description: who speaks
+    not_checkable: true
 
   - name: EXPECTS_OUTCOME
     domain: [Turn]
     range: [Outcome]
     cardinality: many
     description: the outcome this turn is meant to elicit
+    not_checkable: true
 
   - name: HAS_CANONICAL_TEXT
     domain: [Turn, Action]
@@ -146,6 +186,10 @@ relations:
     literal_type: str
     cardinality: one
     description: wording the policy states verbatim
+    checks:
+      kind: text_required
+      dimension: communication
+      scope: turn
 
   - name: GENERATION_ALLOWED
     domain: [Turn, Action]
@@ -153,6 +197,7 @@ relations:
     literal_type: bool
     cardinality: one
     description: whether paraphrase is permitted; drives the grading mode downstream
+    not_checkable: true
 
   - name: GOVERNED_BY
     domain: [UseCase, Capability, State, Decision, Tool, Turn, Action]
@@ -160,6 +205,7 @@ relations:
     cardinality: many
     materiality: high
     description: the rule constrains this entity
+    not_checkable: true
 
   - name: RULE_REQUIRES
     domain: [Rule]
@@ -168,6 +214,11 @@ relations:
     polarity: positive
     materiality: high
     description: the rule obliges this
+    checks:
+      kind: action_required
+      dimension: policy
+      scope: journey
+      grouping: per_head
 
   - name: RULE_FORBIDS
     domain: [Rule]
@@ -176,6 +227,11 @@ relations:
     polarity: negative
     materiality: high
     description: the rule prohibits this
+    checks:
+      kind: action_forbidden
+      dimension: policy
+      scope: journey
+      grouping: per_head
 
   - name: RULE_PERMITS
     domain: [Rule]
@@ -183,6 +239,7 @@ relations:
     cardinality: many
     polarity: positive
     description: the rule allows this without obliging it
+    not_checkable: true
 
   - name: RULE_STATES
     domain: [Rule]
@@ -191,6 +248,7 @@ relations:
     cardinality: one
     materiality: high
     description: the rule as the source words it
+    not_checkable: true
 
   - name: HAS_CONDITION
     domain: [Rule, Outcome]
@@ -198,6 +256,7 @@ relations:
     cardinality: many
     materiality: high
     description: the rule or outcome applies only when this holds
+    not_checkable: true
 
   - name: HAS_EXCEPTION
     domain: [Rule]
@@ -205,6 +264,7 @@ relations:
     cardinality: many
     materiality: high
     description: the rule does not apply when this holds
+    not_checkable: true
 
   - name: HAS_SEVERITY
     domain: [Rule]
@@ -213,6 +273,7 @@ relations:
     enum: [blocker, error, warning, info]
     cardinality: one
     description: consequence of violating the rule
+    not_checkable: true
 
   - name: HAS_SCOPE
     domain: [Rule]
@@ -221,6 +282,7 @@ relations:
     enum: [turn, state, capability, journey, tool]
     cardinality: one
     description: the breadth over which the rule holds
+    not_checkable: true
 
   - name: PRECEDES
     domain: [Action, State, Turn]
@@ -228,6 +290,10 @@ relations:
     cardinality: many
     materiality: high
     description: the head must occur before the tail
+    checks:
+      kind: order_expected
+      dimension: trajectory
+      scope: journey
 
   - name: ON_VARIABLE
     domain: [Condition]
@@ -235,6 +301,7 @@ relations:
     cardinality: one
     materiality: high
     description: the variable the condition tests
+    not_checkable: true
 
   - name: OPERATOR
     domain: [Condition]
@@ -244,6 +311,7 @@ relations:
     cardinality: one
     materiality: high
     description: the comparison applied
+    not_checkable: true
 
   - name: COMPARE_TO
     domain: [Condition]
@@ -251,12 +319,14 @@ relations:
     cardinality: one
     materiality: high
     description: the value compared against
+    not_checkable: true
 
   - name: HAS_STATE_VARIABLE
     domain: [UseCase, Capability]
     range: [StateVariable]
     cardinality: many
     description: a runtime variable the journey maintains
+    not_checkable: true
 
   - name: VARIABLE_TYPE
     domain: [StateVariable]
@@ -265,6 +335,7 @@ relations:
     enum: [int, bool, enum, str]
     cardinality: one
     description: the variable's type
+    not_checkable: true
 
   - name: HAS_THRESHOLD
     domain: [Capability, Decision, Tool, Rule, StateVariable]
@@ -272,6 +343,10 @@ relations:
     cardinality: many
     materiality: high
     description: a limit governing the entity
+    checks:
+      kind: count_limit
+      dimension: state
+      scope: capability
 
   - name: VALUE_IS
     domain: [Value]
@@ -280,6 +355,7 @@ relations:
     cardinality: one
     materiality: high
     description: the exact value, recorded verbatim and never normalised
+    not_checkable: true
 
   # Telemetry bindings. Declared here so the vocabulary is complete, but they are
   # never extracted from policy: no policy names a span attribute. They are proposed
@@ -291,6 +367,7 @@ relations:
     cardinality: many
     materiality: high
     description: workflow span name this capability appears as
+    not_checkable: true
 
   - name: EMITTED_AS_TOOL
     domain: [Tool]
@@ -299,6 +376,7 @@ relations:
     cardinality: many
     materiality: high
     description: span tool attribute this tool appears as
+    not_checkable: true
 
   - name: EMITTED_AS_RESULT
     domain: [Outcome]
@@ -307,6 +385,7 @@ relations:
     cardinality: many
     materiality: high
     description: tool result payload this outcome appears as
+    not_checkable: true
 
   - name: EMITTED_AS_CHECKPOINT
     domain: [State]
@@ -315,6 +394,7 @@ relations:
     cardinality: many
     materiality: high
     description: checkpoint key/value this state appears as
+    not_checkable: true
 
   - name: EMITTED_AS_FIELD
     domain: [StateVariable]
@@ -323,3 +403,4 @@ relations:
     cardinality: many
     materiality: high
     description: telemetry field name this variable appears as
+    not_checkable: true

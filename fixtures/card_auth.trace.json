@@ -1,0 +1,446 @@
+{
+  "_comment": "SYNTHETIC. A card-authentication run written in the Galileo turn-structured export shape, for exercising the binder, the runtime replay and the graders end to end. It deliberately contains one violation: a fourth authentication attempt, which the policy caps at three. The real production export in grounding/03 is from a different agent (AOP User Identification) and binds to nothing in this ontology -- which is itself worth testing, and is.",
+  "session_external_id": "card-auth-demo",
+  "trace_count": 6,
+  "turns": [
+    {
+      "trace_name": "card-auth-demo:turn:0",
+      "trace_attributes": {
+        "conversation_id": "card-auth-demo",
+        "galileo_turn_id": "0"
+      },
+      "span_count": 3,
+      "spans": [
+        {
+          "step": "1",
+          "type": "llm",
+          "name": "user_message",
+          "attributes": {},
+          "input": "None",
+          "output": "{'role': 'assistant', 'content': 'Welcome. For your security, I need to authenticate you before we proceed.'}",
+          "status_code": "0",
+          "tool_call_id": "None"
+        },
+        {
+          "step": "2",
+          "type": "workflow",
+          "name": "customer authentication",
+          "attributes": {
+            "event_type": "audit_workflow"
+          },
+          "input": "Selected customer authentication",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "None"
+        },
+        {
+          "step": "3",
+          "type": "tool",
+          "name": "set_metadata",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "set_metadata"
+          },
+          "input": "{\"policy_input\": [\"checkpoint\", \"opening\"]}",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "fr_set_metadata_3"
+        }
+      ]
+    },
+    {
+      "trace_name": "card-auth-demo:turn:1",
+      "trace_attributes": {
+        "conversation_id": "card-auth-demo",
+        "galileo_turn_id": "1"
+      },
+      "span_count": 6,
+      "spans": [
+        {
+          "step": "1",
+          "type": "llm",
+          "name": "user_message",
+          "attributes": {},
+          "input": "[{'role': 'user', 'content': 'Yes, go ahead.'}]",
+          "output": "{'role': 'assistant', 'content': 'Please tell me the information needed to verify your identity.'}",
+          "status_code": "0",
+          "tool_call_id": "None"
+        },
+        {
+          "step": "2",
+          "type": "workflow",
+          "name": "customer authentication",
+          "attributes": {
+            "event_type": "audit_workflow"
+          },
+          "input": "Selected customer authentication",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "None"
+        },
+        {
+          "step": "3",
+          "type": "tool",
+          "name": "set_metadata",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "set_metadata"
+          },
+          "input": "{\"policy_input\": [\"checkpoint\", \"authenticating\"]}",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "fr_set_metadata_3"
+        },
+        {
+          "step": "4",
+          "type": "tool",
+          "name": "authenticate_customer",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "authenticate_customer"
+          },
+          "input": "{\"attempt_count\": 1}",
+          "output": "{\"match\": \"FAILED\"}",
+          "status_code": "0",
+          "tool_call_id": "fr_authenticate_customer_4"
+        },
+        {
+          "step": "5",
+          "type": "tool",
+          "name": "set_metadata",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "set_metadata"
+          },
+          "input": "{\"policy_input\": [\"attempt_count\", \"1\"]}",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "fr_set_metadata_5"
+        },
+        {
+          "step": "6",
+          "type": "tool",
+          "name": "set_metadata",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "set_metadata"
+          },
+          "input": "{\"policy_input\": [\"checkpoint\", \"retry\"]}",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "fr_set_metadata_6"
+        }
+      ]
+    },
+    {
+      "trace_name": "card-auth-demo:turn:2",
+      "trace_attributes": {
+        "conversation_id": "card-auth-demo",
+        "galileo_turn_id": "2"
+      },
+      "span_count": 6,
+      "spans": [
+        {
+          "step": "1",
+          "type": "llm",
+          "name": "user_message",
+          "attributes": {},
+          "input": "[{'role': 'user', 'content': \"It's four one two two.\"}]",
+          "output": "{'role': 'assistant', 'content': \"I'm sorry, I couldn't verify your details. Please try again.\"}",
+          "status_code": "0",
+          "tool_call_id": "None"
+        },
+        {
+          "step": "2",
+          "type": "workflow",
+          "name": "customer authentication",
+          "attributes": {
+            "event_type": "audit_workflow"
+          },
+          "input": "Selected customer authentication",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "None"
+        },
+        {
+          "step": "3",
+          "type": "tool",
+          "name": "set_metadata",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "set_metadata"
+          },
+          "input": "{\"policy_input\": [\"checkpoint\", \"authenticating\"]}",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "fr_set_metadata_3"
+        },
+        {
+          "step": "4",
+          "type": "tool",
+          "name": "authenticate_customer",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "authenticate_customer"
+          },
+          "input": "{\"attempt_count\": 2}",
+          "output": "{\"match\": \"FAILED\"}",
+          "status_code": "0",
+          "tool_call_id": "fr_authenticate_customer_4"
+        },
+        {
+          "step": "5",
+          "type": "tool",
+          "name": "set_metadata",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "set_metadata"
+          },
+          "input": "{\"policy_input\": [\"attempt_count\", \"2\"]}",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "fr_set_metadata_5"
+        },
+        {
+          "step": "6",
+          "type": "tool",
+          "name": "set_metadata",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "set_metadata"
+          },
+          "input": "{\"policy_input\": [\"checkpoint\", \"retry\"]}",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "fr_set_metadata_6"
+        }
+      ]
+    },
+    {
+      "trace_name": "card-auth-demo:turn:3",
+      "trace_attributes": {
+        "conversation_id": "card-auth-demo",
+        "galileo_turn_id": "3"
+      },
+      "span_count": 6,
+      "spans": [
+        {
+          "step": "1",
+          "type": "llm",
+          "name": "user_message",
+          "attributes": {},
+          "input": "[{'role': 'user', 'content': 'Four one two three.'}]",
+          "output": "{'role': 'assistant', 'content': \"I'm sorry, I couldn't verify your details. Please try again.\"}",
+          "status_code": "0",
+          "tool_call_id": "None"
+        },
+        {
+          "step": "2",
+          "type": "workflow",
+          "name": "customer authentication",
+          "attributes": {
+            "event_type": "audit_workflow"
+          },
+          "input": "Selected customer authentication",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "None"
+        },
+        {
+          "step": "3",
+          "type": "tool",
+          "name": "set_metadata",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "set_metadata"
+          },
+          "input": "{\"policy_input\": [\"checkpoint\", \"authenticating\"]}",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "fr_set_metadata_3"
+        },
+        {
+          "step": "4",
+          "type": "tool",
+          "name": "authenticate_customer",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "authenticate_customer"
+          },
+          "input": "{\"attempt_count\": 3}",
+          "output": "{\"match\": \"FAILED\"}",
+          "status_code": "0",
+          "tool_call_id": "fr_authenticate_customer_4"
+        },
+        {
+          "step": "5",
+          "type": "tool",
+          "name": "set_metadata",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "set_metadata"
+          },
+          "input": "{\"policy_input\": [\"attempt_count\", \"3\"]}",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "fr_set_metadata_5"
+        },
+        {
+          "step": "6",
+          "type": "tool",
+          "name": "set_metadata",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "set_metadata"
+          },
+          "input": "{\"policy_input\": [\"checkpoint\", \"retry\"]}",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "fr_set_metadata_6"
+        }
+      ]
+    },
+    {
+      "trace_name": "card-auth-demo:turn:4",
+      "trace_attributes": {
+        "conversation_id": "card-auth-demo",
+        "galileo_turn_id": "4"
+      },
+      "span_count": 6,
+      "spans": [
+        {
+          "step": "1",
+          "type": "llm",
+          "name": "user_message",
+          "attributes": {},
+          "input": "[{'role': 'user', 'content': 'Let me try once more.'}]",
+          "output": "{'role': 'assistant', 'content': 'One more time, please.'}",
+          "status_code": "0",
+          "tool_call_id": "None"
+        },
+        {
+          "step": "2",
+          "type": "workflow",
+          "name": "customer authentication",
+          "attributes": {
+            "event_type": "audit_workflow"
+          },
+          "input": "Selected customer authentication",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "None"
+        },
+        {
+          "step": "3",
+          "type": "tool",
+          "name": "set_metadata",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "set_metadata"
+          },
+          "input": "{\"policy_input\": [\"checkpoint\", \"authenticating\"]}",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "fr_set_metadata_3"
+        },
+        {
+          "step": "4",
+          "type": "tool",
+          "name": "authenticate_customer",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "authenticate_customer"
+          },
+          "input": "{\"attempt_count\": 4}",
+          "output": "{\"match\": \"FAILED\"}",
+          "status_code": "0",
+          "tool_call_id": "fr_authenticate_customer_4"
+        },
+        {
+          "step": "5",
+          "type": "tool",
+          "name": "set_metadata",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "set_metadata"
+          },
+          "input": "{\"policy_input\": [\"attempt_count\", \"4\"]}",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "fr_set_metadata_5"
+        },
+        {
+          "step": "6",
+          "type": "tool",
+          "name": "set_metadata",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "set_metadata"
+          },
+          "input": "{\"policy_input\": [\"checkpoint\", \"max_retry\"]}",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "fr_set_metadata_6"
+        }
+      ]
+    },
+    {
+      "trace_name": "card-auth-demo:turn:5",
+      "trace_attributes": {
+        "conversation_id": "card-auth-demo",
+        "galileo_turn_id": "5"
+      },
+      "span_count": 4,
+      "spans": [
+        {
+          "step": "1",
+          "type": "llm",
+          "name": "user_message",
+          "attributes": {},
+          "input": "[{'role': 'user', 'content': 'Okay.'}]",
+          "output": "{'role': 'assistant', 'content': \"I'm sorry, I'm unable to authenticate you at this time. I will now connect you to a representative for further assistance.\"}",
+          "status_code": "0",
+          "tool_call_id": "None"
+        },
+        {
+          "step": "2",
+          "type": "workflow",
+          "name": "customer authentication",
+          "attributes": {
+            "event_type": "audit_workflow"
+          },
+          "input": "Selected customer authentication",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "None"
+        },
+        {
+          "step": "3",
+          "type": "tool",
+          "name": "transfer_to_ccp",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "transfer_to_ccp"
+          },
+          "input": "{\"reason\": \"max_retry\"}",
+          "output": "{\"match\": \"TRANSFERRED\"}",
+          "status_code": "0",
+          "tool_call_id": "fr_transfer_to_ccp_3"
+        },
+        {
+          "step": "4",
+          "type": "tool",
+          "name": "set_metadata",
+          "attributes": {
+            "event_type": "audit_tool",
+            "tool": "set_metadata"
+          },
+          "input": "{\"policy_input\": [\"checkpoint\", \"transfer\"]}",
+          "output": "None",
+          "status_code": "0",
+          "tool_call_id": "fr_set_metadata_4"
+        }
+      ]
+    }
+  ]
+}

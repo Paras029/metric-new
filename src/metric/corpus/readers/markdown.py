@@ -12,11 +12,13 @@ from __future__ import annotations
 import re
 
 from metric.corpus.blocks import RawBlock, row_text
+from metric.ontology.types import PassageKind
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.*\S)\s*$")
 _TABLE_ROW = re.compile(r"^\s*\|(.+)\|\s*$")
 _TABLE_RULE = re.compile(r"^\s*\|[\s:|-]+\|\s*$")
 _BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*\S)\s*$")
+_RULE = re.compile(r"^\s*(?:-{3,}|\*{3,}|_{3,})\s*$")
 _BREAK = re.compile(r"<br\s*/?>", re.IGNORECASE)
 
 # Emphasis is unwrapped as matched pairs rather than by stripping the characters.
@@ -35,30 +37,37 @@ def read_markdown(text: str, *, doc_label: str = "") -> list[RawBlock]:
     lines = text.splitlines()
     blocks: list[RawBlock] = []
     heading_path: list[str] = []
-    paragraph: list[str] = []
+
+    # An open block absorbs continuation lines until something closes it. Without this
+    # a wrapped bullet becomes two passages and the second half of the sentence is
+    # severed from the rule it belongs to -- "Enforce a hard maximum of 3 attempts."
+    # in one passage and "The retry counter must not reset." in another, where no quote
+    # can span them and the second looks like an orphan.
+    buffer: list[str] = []
+    kind: PassageKind = "prose"
     index = 0
 
-    def flush_paragraph() -> None:
-        if not paragraph:
-            return
-        body = " ".join(paragraph).strip()
-        paragraph.clear()
+    def flush() -> None:
+        nonlocal kind
+        body = " ".join(buffer).strip()
+        buffer.clear()
         if body:
             blocks.append(
                 RawBlock(
                     location=_location(doc_label, heading_path),
-                    kind="prose",
+                    kind=kind,
                     heading_path=tuple(heading_path),
                     text=body,
                 )
             )
+        kind = "prose"
 
     while index < len(lines):
         line = lines[index]
 
         heading = _HEADING.match(line)
         if heading is not None:
-            flush_paragraph()
+            flush()
             level = len(heading.group(1))
             title = _plain(heading.group(2))
             del heading_path[level - 1 :]
@@ -75,7 +84,7 @@ def read_markdown(text: str, *, doc_label: str = "") -> list[RawBlock]:
             continue
 
         if _TABLE_ROW.match(line) is not None:
-            flush_paragraph()
+            flush()
             consumed, table_blocks = _read_table(lines, index, doc_label, tuple(heading_path))
             blocks.extend(table_blocks)
             index += consumed
@@ -83,25 +92,19 @@ def read_markdown(text: str, *, doc_label: str = "") -> list[RawBlock]:
 
         bullet = _BULLET.match(line)
         if bullet is not None:
-            flush_paragraph()
-            blocks.append(
-                RawBlock(
-                    location=_location(doc_label, heading_path),
-                    kind="list",
-                    heading_path=tuple(heading_path),
-                    text=_plain(bullet.group(1)),
-                )
-            )
+            flush()
+            kind = "list"
+            buffer.append(_plain(bullet.group(1)))
             index += 1
             continue
 
-        if not line.strip():
-            flush_paragraph()
+        if not line.strip() or _RULE.match(line):
+            flush()
         else:
-            paragraph.append(_plain(line.strip()))
+            buffer.append(_plain(line.strip()))
         index += 1
 
-    flush_paragraph()
+    flush()
     return blocks
 
 
