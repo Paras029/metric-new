@@ -1,6 +1,11 @@
 # Design Plan 01 — Triple Ontology and the Ingestion Pipeline
 
 **Status:** proposal for review. Nothing here is built yet.
+**Partially superseded:** §2 (ontology) and §3–§4 (ingestion, reproducibility) are replaced by
+[plan 02](02-ingestion-pipeline.md), which makes the schema human-editable rather than hardcoded and
+batches extraction by content size rather than by relation family. §5 (views), §6 (reverse
+ingestion), §7 (OTEL), §8 (GMS) and §9–§11 still stand.
+
 **Scope:** the ontology schema, the forward ingestion pipeline (documents → triples), the correction
 loops, the views, and the reverse pipeline (conversation → ground truth). Plus two decisions that
 need settling: GMS in phase 1, and how scenarios are generated without it.

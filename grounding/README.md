@@ -12,10 +12,13 @@ facts rather than re-deriving them.
 | `04-eval-poc-codebase.md` | Curated `eval-poc` source: procedural Neo4j KG, `GroundTruthOracle`, `PathResolver`, `RuleCompiler`, `GroundTruthExtractor`, schemas, simulator, scenario artifacts. | The working prototype of the executable-oracle pattern: rules → typed assertions → occurrence-level ground truth. |
 | `05-beyond-ship-and-pray-methodology-digest.md` | Working digest of the KnowlytiX methodology (concepts, taxonomies, API surface, design arguments). Not a reproduction of the book. | Base/enrichment separation, designed experiments, multi-level agentic evaluation, attribution, resilience, GMS as optional backend. |
 | `06-key-findings-scenario-generator-vs-target.md` | Gap analysis of `paras029/metric` @ `c4f6d8e` against all of the above, with `file:line` evidence. | What we have, what is missing, what to keep, and what the re-architecture actually is. |
+| `07-card-authentication-policy.md` | The working policy document: Card Authentication Voice Bot POC operating procedure. | The phase-1 ingestion target and golden fixture — small enough that the correct graph can be written by hand and asserted against. |
 
 ## Reading order
 
-New to the project: `06` → `01` → `03` → `02` → `04` → `05`.
+New to the project: `06` → `01` → `03` → `02` → `04` → `05` → `07`.
+
+Design proposals built on these live in [`../design/`](../design/).
 
 `06` is the entry point — it states the current position and the delta, and references the others
 where detail is needed.
