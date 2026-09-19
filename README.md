@@ -27,6 +27,7 @@ metric ui                 # browse the build, review it, grade traces — http:/
 metric bases              # what this graph can be asked, and what was generated from it
 metric evaluate           # grade the traces on the command line
 metric plan               # the variants each base would be run under
+metric run                # run the plan against an agent and grade every run
 metric attribute RUNS     # which factor level made the agent fail, across a cohort
 metric discover TRACE...  # draft a profile and an observed structure from telemetry
 metric settings           # every tunable a build would use, and its digest
@@ -117,7 +118,9 @@ synthetic benchmark drifting away from production evaluation.
 | `evaluate/` | one grader per assertion kind, and verdicts by dimension |
 | `discover/` | traces in, a draft profile and observed structure out |
 | `enrich/` | the factor catalogue, relevance and profiles, the design over it, the render seam |
+| `run/` | driving a planned variant against an agent, and the trace that comes back |
 | `attribution.py` | which factor level made the agent fail, and which component |
+| `regression.py` | the same question with the other factors held fixed |
 | `settings.py` | every tunable, hashed into build identity |
 | `ui/` | the pages, stdlib server, SVG workflow layout |
 
@@ -176,6 +179,16 @@ The load-bearing ideas, each with the failure it prevents:
 - **No rate without an interval, no comparison without correction.** Four of five passing is not 80%
   — the interval runs from 38% to 96%. Dozens of tests at a nominal 5% produce a finding by chance,
   so the whole family is corrected before anything is called an effect.
+- **A marginal comparison cannot tell an effect from the company it keeps.** A pairwise design does
+  not balance every factor within every other's levels, so a level inherits the failures of the one
+  it was paired with. Measured: an agent built to fail under exactly one level produced *five*
+  marginal findings and one adjusted one. Both are reported, and the difference is named.
+- **The runner does not know the answer.** It drives a conversation and records a `Trace` — the same
+  type a production export produces — and grading happens afterwards, through the same evaluator.
+  A harness that both stages a situation and judges it is marking its own homework.
+- **A run that could not have failed does not reach attribution.** No turn the agent placed itself,
+  or the situation never arose: either way it tells you nothing, and a cohort padded with them shows
+  every factor level doing well.
 
 ## Documents
 
@@ -187,6 +200,7 @@ The load-bearing ideas, each with the failure it prevents:
 | `design/09-discovery-enrichment-and-a-sweep.md` | discovery from traces, the enrichment layer, and what a performance and correctness sweep found |
 | `design/10-reverse-mapping.md` | placing a turn in the graph, the inverse index, and ground truth per turn. **The reverse direction.** |
 | `design/11-bases-enrichment-and-deployment.md` | the base taxonomy, the answer check, the enrichment design space, settings, and SafeChain |
+| `design/12-running-and-attribution.md` | driving a plan against an agent, the four bugs a clean baseline caught, and adjusted attribution |
 | `SETUP.md` | installing it, running it through SafeChain, and standing up a new use case |
 | `design/01`–`05` | the route there: ontology, failure modes, repo shape, loopholes, GEODE assessment |
 | `grounding/README.md` | index and reading order for the grounding material |
@@ -197,11 +211,16 @@ The load-bearing ideas, each with the failure it prevents:
 ## Status
 
 Policy to verdict runs end to end in both directions, over two corpora: a policy with traces, and
-traces with no policy. 258 tests; ruff and `mypy --strict` clean. On the card-authentication policy,
-6 journey paths became **32 bases across 5 families**, every one of them checked by recovering its
-answer from the triples a second time.
+traces with no policy. **Plan to attribution now closes too**: `metric run` drives every planned
+variant against an agent and `metric attribute` says which factor level caused the failures.
+291 tests; ruff and `mypy --strict` clean.
 
-Not yet built: a simulator to turn a planned variant into an actual run — which is now the only
-thing between `metric plan` and `metric attribute` — the independent annotation and accuracy gate,
-φp space-filling designs, a semantic oracle for paraphrase-permitted language, and the GEODE
-evaluation. `design/11` §7 lists the current limits and §8 the order to take them in.
+Measured on the card-authentication policy: 6 journey paths become **32 bases across 5 families**,
+each checked by recovering its answer from the triples a second time; 410 planned runs; and an agent
+built to degrade under exactly one factor level is recovered as that level and no other
+(odds ratio 0.012, q < 0.0001, pseudo-R² 0.87).
+
+Not yet built: the independent annotation and accuracy gate — still the critical path, since
+everything rests on the graph being right and nothing here measures that — φp space-filling designs,
+a semantic oracle for paraphrase-permitted language, and the GEODE evaluation. `design/12` §6 lists
+the current limits and §7 the order to take them in.

@@ -12,9 +12,10 @@ git clone https://github.com/Paras029/metric-new && cd metric-new
 python -m venv .venv && source .venv/bin/activate     # Python 3.11 or newer
 pip install -e ".[dev]"
 
-pytest -q                     # 258 tests
+pytest -q                     # 291 tests
 metric bases                  # what this graph can be asked, and what was generated
 metric evaluate --turns       # grade the traces, turn by turn
+metric run --limit 60         # drive the plan against the reference agent
 metric ui                     # http://127.0.0.1:8765
 ```
 
@@ -33,6 +34,7 @@ The build writes to `build/`:
 | `evaluations.json` | verdicts per trace, and ground truth per turn |
 | `questions.yaml` | what the pipeline could not settle — **edit it in place and re-run** |
 | `manifest.json` | build identity: corpus, schema, prompts, model, settings, code |
+| `runs.json` | one record per usable run, ready for `metric attribute` |
 | `report.md` | what went wrong first, then the counts |
 
 ### Python
@@ -241,40 +243,101 @@ does not silently undo itself on the next build.
 
 ---
 
-## Attribution, once runs come back
-
-`metric plan` produces the runs. Run them through your agent however you reach it, then
-bring back one record per run:
-
-```json
-[{"variant": "a1b2", "scenario": "c3d4", "levels": {"asr": "heavy_noise"}, "passed": false}]
-```
+## Running the plan, and attributing what comes back
 
 ```bash
-metric attribute results.json
+metric plan                  # the runs the graph implies
+metric run --limit 180       # drive them against an agent and grade every one
+metric attribute build/runs.json
 ```
+
+`metric run` drives each planned variant as a conversation, records a `Trace` — the same
+type a production export produces — and grades it through the same evaluator a real
+conversation goes through. That sharing is the point: a synthetic benchmark that grades
+itself by its own route drifts away from the production evaluation it is meant to predict,
+and the drift is invisible because both numbers keep going up.
+
+Two gates decide whether a run counts. **Gradable**: at least one turn the agent placed
+itself, because only a checkpoint can fail an agent. **Staged**: the run touched something
+the base is about, because a conversation can bind perfectly and never reach the thing
+under test. Runs failing either are reported and excluded — a cohort padded with them
+shows every factor level doing well.
+
+### Pointing it at your own agent
+
+`--agent reference` is a fixture that walks the graph it is graded against. It cannot tell
+you anything about a real agent; it is there so that a failure with no flaw injected means
+the *harness* is wrong. For a real system, implement two methods:
+
+```python
+from metric.run.model import Reply, ToolCall
+from metric.run.simulate import simulate_plan
+
+class MyAgent:
+    identity = "checkout-bot@2026-03-01"
+
+    def begin(self, run_id: str) -> "MySession":
+        return MySession(run_id)
+
+class MySession:
+    def send(self, utterance: str) -> Reply:
+        answer = my_client.turn(utterance)
+        return Reply(
+            said=answer.text,
+            tools=tuple(ToolCall(name=c.name, outcome=c.result) for c in answer.calls),
+            state=answer.checkpoint,     # what lets a turn fail the agent
+            finished=answer.ended,
+        )
+
+cohort = simulate_plan(space.scenarios, plan, MyAgent(), graph=..., schema=..., identity_digest=...)
+```
+
+`state` is the one field worth fighting for. A turn the agent placed itself is gradable; a
+turn we inferred is analysable and forced to advisory. An agent that never fills it
+produces a cohort with **nothing to attribute** — that is designed, and it is the strongest
+argument for instrumenting properly.
+
+### What the report will and will not claim
 
 Every rate carries a Wilson interval, every comparison an odds ratio with its interval,
 and the whole family is corrected with Benjamini–Hochberg. A cell too small to compare is
-named rather than dropped. Four of five passing is not 80% — at that sample size the
-interval runs from 38% to 96%, and printing 80% invites a decision the data cannot
-support.
+named rather than dropped.
 
-Turning a chosen level into actual text is the one piece of application glue:
+Two attributions are printed, and the difference between them is the useful part.
+**Marginal** compares each level against every other level of its factor. **Adjusted**
+fits all levels jointly, so each is measured with the others held fixed. A pairwise design
+does not balance every factor within every other's levels, so a level can inherit the
+failures of the one it was paired with — measured here, an agent built to fail under
+exactly one level produced five marginal findings and one adjusted one. Where they
+disagree the report says so.
+
+To check the whole chain end to end on your own corpus, inject a defect tied to one level
+and see whether it comes back:
+
+```bash
+metric run --limit 180 --flaw-when heavy_noise=skip_wording
+metric attribute build/runs.json
+```
+
+### Rendering levels into the conversation
+
+Turning a chosen level into actual text is the one piece of application glue.
+`--materialise voice` uses the worked renderer in `metric/enrich/voice.py`; write your own
+against your transcripts:
 
 ```python
 from metric.enrich.materialize import register
 
-def voice(question, levels):
-    ...  # make `garbled` read garbled
+def mine(question, levels):
+    ...                      # make `garbled` actually read garbled
     return text, ()          # nothing left unrendered
 
-register("voice", voice)
+register("mine", mine)
 ```
 
-The default materialiser is the identity and reports every level as *unrendered*, which
-is honest: a run made under it varied nothing, and nothing should be attributed to a
-column that never reached the agent.
+The default is the identity and reports every level as *unrendered*, which is honest: a
+run made under it varied nothing, and nothing should be attributed to a column that never
+reached the agent.
 
 ---
 
@@ -296,6 +359,13 @@ must not quietly become a new build.
 was placed in the graph. This is deliberate: evaluating a trace from a different agent
 gives no verdicts rather than confident nonsense. Run `metric discover` over the traces
 to draft a matching profile.
+
+**A cohort with nothing to attribute** — the agent never narrated its position, so no turn
+could fail it. `Reply.state` is the field to fill; see "Pointing it at your own agent".
+
+**Every run fails identically** — check `metric run`'s notes for runs that never reached
+anything their base is about. The reference agent walks its own path regardless of the
+situation a base stages, which is a limit of the fixture, not of the evaluation.
 
 **Bases quarantined after answer recovery** — a generator and the triples disagree.
 `metric bases` prints the disagreement for each. Treat it as a bug in the generator or a

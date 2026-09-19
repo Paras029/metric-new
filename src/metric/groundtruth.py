@@ -278,8 +278,14 @@ def _findings(
         if text and _folded(text) not in _folded(observed.said):
             found.append(f"did not say the required wording: {text[:60]}")
 
-    if observed.silent and not expected.terminal:
-        found.append("the turn produced no tool call and this state is not an ending")
+    # Only where the state has tools to call. A state whose whole job is to speak —
+    # an opening, a retry prompt — is *supposed* to produce no tool call, and reporting
+    # that as a finding fired on every clean run of the reference agent.
+    if observed.silent and not expected.terminal and expected.tools:
+        found.append(
+            f"the turn produced no tool call, and {where} declares "
+            f"{', '.join(sorted(name(t) for t in expected.tools))}"
+        )
 
     return tuple(found)
 

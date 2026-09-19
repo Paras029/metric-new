@@ -17,6 +17,7 @@ from metric.llm.gateway import Gateway
 from metric.llm.select import build_gateway
 from metric.ontology.schema import SchemaError, load_schema
 from metric.pipeline import DocumentSpec, ingest
+from metric.run.agents import FLAWS
 from metric.settings import Settings, SettingsError, load_settings
 from metric.telemetry.profile import ProfileError, load_profile
 from metric.workspace import BuildSpec, Workspace
@@ -95,12 +96,53 @@ def _parser() -> argparse.ArgumentParser:
     bases_cmd.add_argument("--category", help="show the bases of one category in full")
     bases_cmd.set_defaults(run=_run_bases)
 
+    run_cmd = sub.add_parser(
+        "run", help="run the plan against an agent and grade every run"
+    )
+    run_cmd.add_argument("--corpus", type=Path, default=Path("corpus.yaml"))
+    run_cmd.add_argument("--out", type=Path, default=Path("build"))
+    run_cmd.add_argument(
+        "--agent",
+        default="reference",
+        help="`reference` walks the graph itself; anything else needs an adapter",
+    )
+    run_cmd.add_argument(
+        "--flaw",
+        action="append",
+        default=[],
+        help=f"inject a defect into the reference agent: {', '.join(FLAWS)}",
+    )
+    run_cmd.add_argument(
+        "--flaw-when",
+        action="append",
+        default=[],
+        metavar="LEVEL=FLAW",
+        help=(
+            "inject a defect only under one factor level, e.g. heavy_noise=skip_wording. "
+            "This is how to check the attribution layer end to end: the cohort should "
+            "recover that level and no other"
+        ),
+    )
+    run_cmd.add_argument(
+        "--materialise", default="voice", help="how a chosen level becomes text"
+    )
+    run_cmd.add_argument("--limit", type=int, default=0, help="run only the first N variants")
+    run_cmd.add_argument(
+        "--results", type=Path, help="where to write the cohort, ready for `metric attribute`"
+    )
+    run_cmd.set_defaults(run=_run_run)
+
     attribute_cmd = sub.add_parser(
         "attribute", help="which factor level made the agent fail, across a cohort of runs"
     )
     attribute_cmd.add_argument("results", type=Path, help="JSON list of run outcomes")
     attribute_cmd.add_argument(
         "--min-cell", type=int, default=5, help="runs needed either side of a comparison"
+    )
+    attribute_cmd.add_argument(
+        "--marginal-only",
+        action="store_true",
+        help="skip the adjusted model; marginal comparisons cannot separate confounded factors",
     )
     attribute_cmd.set_defaults(run=_run_attribute)
 
@@ -222,9 +264,110 @@ def _run_bases(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_run(args: argparse.Namespace) -> int:
+    """Run the plan and grade it. The one command that closes plan -> attribute."""
+    from metric import enrich  # noqa: F401  - registers the shipped materialisers
+    from metric.run.agents import GraphAgent
+    from metric.run.simulate import Settings as RunSettings
+    from metric.run.simulate import simulate_plan
+
+    space = _workspace(args)
+    if space.plan is None:
+        raise ValueError(f"{args.corpus} names no factor catalogue, so there is nothing to run")
+
+    unknown = sorted(set(args.flaw) - set(FLAWS))
+    if unknown:
+        raise ValueError(f"unknown flaws {unknown}; the reference agent has {list(FLAWS)}")
+    if args.agent != "reference":
+        raise ValueError(
+            f"no adapter for agent {args.agent!r}. Implement the `Agent` protocol in "
+            "metric.run.model and pass it to simulate_plan; `reference` is a fixture that "
+            "walks the graph and cannot tell you anything about a real agent"
+        )
+
+    conditional = dict(_pair(entry) for entry in args.flaw_when)
+    unknown_conditional = sorted(set(conditional.values()) - set(FLAWS))
+    if unknown_conditional:
+        raise ValueError(
+            f"unknown flaws {unknown_conditional}; the reference agent has {list(FLAWS)}"
+        )
+
+    agent = GraphAgent(space.graph, flaws=tuple(args.flaw))
+    factory = (
+        (lambda base, levels: GraphAgent(space.graph, flaws=conditional, levels=levels))
+        if conditional
+        else None
+    )
+
+    cohort = simulate_plan(
+        space.space.scenarios,
+        space.plan,
+        agent,
+        agents=factory,
+        graph=space.graph,
+        schema=space.schema,
+        identity_digest=space.identity,
+        compiled=space.compiled,
+        settings=RunSettings(
+            checkpoint_variable=space.checkpoint_variable or "checkpoint",
+            materialiser=args.materialise,
+        ),
+        limit=args.limit,
+    )
+
+    passed = sum(1 for r in cohort.gradable if r.passed)
+    print(f"{agent.identity}")
+    print(
+        f"  {len(cohort.runs)} runs, {len(cohort.gradable)} gradable, "
+        f"{passed} passed, {len(cohort.gradable) - passed} failed"
+    )
+    for note in cohort.notes:
+        print(f"  note: {note}")
+
+    # An assertion kind where there is one, otherwise the first turn finding: the run
+    # failed for a reason either way, and the two routes read the same in a tally.
+    worst: Counter[str] = Counter()
+    for run in cohort.gradable:
+        if run.passed:
+            continue
+        reasons = [str(v.assertion.kind) for v in run.evaluation.failures]
+        worst.update(reasons or list(run.findings[:1]))
+    for kind, count in worst.most_common(5):
+        print(f"  {count:4}  {kind[:70]}")
+
+    results = args.results or args.out / "runs.json"
+    results.parent.mkdir(parents=True, exist_ok=True)
+    results.write_text(
+        json.dumps(
+            [
+                {
+                    "variant": o.variant,
+                    "scenario": o.scenario,
+                    "levels": dict(o.levels),
+                    "passed": o.passed,
+                }
+                for o in cohort.outcomes()
+            ],
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    print(f"  wrote {results} — pass it to `metric attribute`")
+    return 0
+
+
+def _pair(entry: str) -> tuple[str, str]:
+    level, _, flaw = entry.partition("=")
+    if not level or not flaw:
+        raise ValueError(f"--flaw-when takes LEVEL=FLAW, not {entry!r}")
+    return level, flaw
+
+
 def _run_attribute(args: argparse.Namespace) -> int:
     """Which level made the agent fail, across a cohort someone actually ran."""
     from metric.attribution import Outcome, attribute
+    from metric.regression import adjust
 
     with args.results.open(encoding="utf-8") as handle:
         records = json.load(handle)
@@ -246,8 +389,10 @@ def _run_attribute(args: argparse.Namespace) -> int:
         f"{found.overall.passed}/{found.overall.total} passed "
         f"({found.overall.value:.0%}, 95% {found.overall.interval})"
     )
+
+    print("\nmarginal — each level against every other level of its factor")
     if not found.significant:
-        print("  no factor level survives correction for multiplicity")
+        print("  nothing survives correction for multiplicity")
     for effect in found.significant:
         print(
             f"  {effect.factor}={effect.level} {effect.direction}: "
@@ -256,6 +401,35 @@ def _run_attribute(args: argparse.Namespace) -> int:
         )
     for note in found.notes:
         print(f"  note: {note}")
+
+    if args.marginal_only:
+        return 0
+
+    model = adjust(outcomes, min_cell=args.min_cell)
+    print("\nadjusted — each level with the other factors held fixed")
+    print(f"  pseudo-R2 {model.pseudo_r2:.3f} over {model.runs} runs, ridge {model.ridge}")
+    if not model.significant:
+        print("  nothing survives once the other factors are accounted for")
+    for coefficient in model.significant:
+        print(
+            f"  {coefficient.factor}={coefficient.level} {coefficient.direction} "
+            f"(vs {coefficient.reference}): odds ratio {coefficient.odds_ratio:.3f} "
+            f"{coefficient.odds_interval}, q={coefficient.q_value:.4f}"
+        )
+    for note in model.notes:
+        print(f"  note: {note}")
+
+    lost = {(e.factor, e.level) for e in found.significant} - {
+        (c.factor, c.level) for c in model.significant
+    }
+    if lost:
+        print(
+            "\n  "
+            + ", ".join(f"{f}={level}" for f, level in sorted(lost))
+            + " looked significant marginally and does not survive adjustment — a pairwise "
+            "design does not balance every factor within every other's levels, so a level "
+            "can inherit the failures of the one it was paired with"
+        )
     return 0
 
 
