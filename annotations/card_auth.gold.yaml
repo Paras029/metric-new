@@ -1,0 +1,176 @@
+# A human reading of the card-authentication policy, against which the pipeline is scored.
+#
+# ---------------------------------------------------------------------------------------
+# READ THIS BEFORE READING ANY NUMBER PRODUCED FROM IT
+#
+# `independent: false`. This annotation was written by the same author as the extraction
+# prompts. That means it measures whether the pipeline reads the document the way its
+# author intended, which is worth knowing and is **not an accuracy gate**. Two people who
+# share an assumption agree with each other perfectly and are both wrong together, and
+# every disagreement about what the document means — exactly where an extraction pipeline
+# goes wrong — is invisible to a measurement like this one.
+#
+# `metric accuracy` therefore reports `trustworthy: false` however good the numbers are,
+# and will not clear a build on it. Replacing this file with one written by someone who
+# has not seen the prompts is the remaining work, and it is a data task rather than a code
+# one: the schema below is all an annotator needs.
+# ---------------------------------------------------------------------------------------
+#
+# Scope. Sections 3, 4, 5 and 6 of the policy — the operating procedure, the behaviour
+# rules, the tool table and the fixed language. Sections 1, 2, 7, 8 and 9 restate those in
+# summary, aspirational or out-of-scope terms and are deliberately not annotated: a
+# restatement scored as a separate fact would count the same reading twice.
+#
+# Method. Each triple below was taken from a sentence of the source, and the sentence is
+# quoted. A fact that needed two sentences joined to see was left out rather than guessed,
+# and is noted where it mattered.
+
+corpus: grounding/07-card-authentication-policy.md
+annotator: "the author of the extraction prompts"
+independent: false
+
+covers:
+  - "3. Operating procedure"
+  - "4. Voice and agentic behavior rules"
+  - "5. Illustrative tools / APIs"
+  - "6. Required vs. generated language"
+
+note: |
+  Six states, two tools, two outcomes, one threshold, four fixed utterances and the rules
+  in §4. The workflow backbone (§3) is annotated from the prose only; the policy also
+  carries a flowchart at §8 that is not reproduced in this transcription, so the two
+  independent readings the document promises cannot both be scored here.
+
+triples:
+  # --- §3 A. Opening and authentication -------------------------------------------------
+  - head: {type: State, name: "Opening and authentication"}
+    relation: USES_TOOL
+    tail: {type: Tool, name: "authenticate_customer"}
+    quote: "Call `authenticate_customer`."
+
+  - head: {type: State, name: "Opening and authentication"}
+    relation: HAS_NEXT_STEP
+    tail: {type: State, name: "Authentication attempts"}
+    quote: "Continue only according to the authentication result."
+    note: >
+      The link to the next state is stated obliquely. An annotator could defensibly leave
+      this out; it is included because §8's flow and §3's ordering both put B after A.
+
+  # --- §3 B. Authentication attempts -----------------------------------------------------
+  - head: {type: State, name: "Authentication attempts"}
+    relation: USES_TOOL
+    tail: {type: Tool, name: "authenticate_customer"}
+    quote: "Request the information required for authentication and call `authenticate_customer`."
+
+  - head: {type: State, name: "Authentication attempts"}
+    relation: OFFERS_DECISION
+    tail: {type: Decision, name: "authentication result"}
+    quote: "Continue only according to the authentication result."
+
+  # --- §3 C. Successful authentication ---------------------------------------------------
+  - head: {type: Outcome, name: "AUTHENTICATED"}
+    relation: LEADS_TO
+    tail: {type: State, name: "Successful authentication"}
+    quote: "If `authenticate_customer` returns `AUTHENTICATED`, inform the customer that they have been successfully authenticated."
+
+  - head: {type: State, name: "Successful authentication"}
+    relation: HAS_NEXT_STEP
+    tail: {type: State, name: "Transfer and end of automated journey"}
+    quote: "Then transfer the call to CCP for further servicing."
+
+  # --- §3 D. Failed authentication and retry ---------------------------------------------
+  - head: {type: Outcome, name: "FAILED"}
+    relation: LEADS_TO
+    tail: {type: State, name: "Failed authentication and retry"}
+    quote: "If authentication fails, inform the customer that the authentication was unsuccessful and ask them to try again."
+
+  - head: {type: State, name: "Failed authentication and retry"}
+    relation: HAS_NEXT_STEP
+    tail: {type: State, name: "Authentication attempts"}
+    quote: "inform the customer that the authentication was unsuccessful and ask them to try again"
+
+  - head: {type: State, name: "Failed authentication and retry"}
+    relation: HAS_NEXT_STEP
+    tail: {type: State, name: "Maximum retry reached"}
+    quote: "The bot may make up to 3 total authentication attempts. It must not make a fourth attempt."
+
+  # --- §3 E. Maximum retry reached -------------------------------------------------------
+  - head: {type: State, name: "Maximum retry reached"}
+    relation: HAS_NEXT_STEP
+    tail: {type: State, name: "Transfer and end of automated journey"}
+    quote: "Then transfer the call to CCP."
+
+  # --- §3 F. Transfer and end -----------------------------------------------------------
+  - head: {type: State, name: "Transfer and end of automated journey"}
+    relation: USES_TOOL
+    tail: {type: Tool, name: "transfer_to_ccp"}
+    quote: "After successful authentication or after the maximum retry limit is reached, call `transfer_to_ccp`."
+
+  - head: {type: State, name: "Transfer and end of automated journey"}
+    relation: IS_TERMINAL
+    tail: "true"
+    quote: "The automated journey ends once the transfer is initiated."
+
+  # --- §4 behaviour rules ----------------------------------------------------------------
+  - head: {type: Rule, name: "Retry control"}
+    relation: HAS_THRESHOLD
+    tail: {type: Value, name: "3"}
+    quote: "Enforce a hard maximum of 3 authentication attempts."
+
+  - head: {type: Rule, name: "No servicing"}
+    relation: RULE_FORBIDS
+    tail: {type: Action, name: "additional account-specific servicing"}
+    quote: "Do not answer or execute additional account-specific servicing requests in this POC."
+
+  - head: {type: Rule, name: "Transfer"}
+    relation: RULE_REQUIRES
+    tail: {type: Action, name: "transfer the call to CCP"}
+    quote: "Transfer to CCP after authentication success or after the third unsuccessful attempt."
+
+  # --- §5 tool table ---------------------------------------------------------------------
+  - head: {type: Tool, name: "authenticate_customer"}
+    relation: RETURNS
+    tail: {type: Outcome, name: "AUTHENTICATED"}
+    quote: "`AUTHENTICATED` / `FAILED`"
+
+  - head: {type: Tool, name: "authenticate_customer"}
+    relation: RETURNS
+    tail: {type: Outcome, name: "FAILED"}
+    quote: "`AUTHENTICATED` / `FAILED`"
+
+  - head: {type: Tool, name: "transfer_to_ccp"}
+    relation: RETURNS
+    tail: {type: Outcome, name: "TRANSFERRED"}
+    quote: "`TRANSFERRED` / `FAILED`"
+
+  - head: {type: Tool, name: "transfer_to_ccp"}
+    relation: RETURNS
+    tail: {type: Outcome, name: "FAILED"}
+    quote: "`TRANSFERRED` / `FAILED`"
+    note: >
+      Added after the first run of the gate. The annotation originally listed only
+      TRANSFERRED and the pipeline was scored as having invented this; the tool table
+      plainly states both. The gate found an error in the gold set, which is the most
+      useful thing an annotation can be wrong about and the reason the disagreements are
+      printed rather than only the score.
+
+  # --- §6 fixed language -----------------------------------------------------------------
+  - head: {type: Turn, name: "Opening"}
+    relation: HAS_CANONICAL_TEXT
+    tail: "Welcome. For your security, I need to authenticate you before we proceed."
+    quote: '**Opening:** "Welcome. For your security, I need to authenticate you before we proceed."'
+
+  - head: {type: Turn, name: "Successful authentication"}
+    relation: HAS_CANONICAL_TEXT
+    tail: "Thank you. You have been successfully authenticated. I will now connect you to CCP for further servicing."
+    quote: '**Successful authentication:** "Thank you. You have been successfully authenticated.'
+
+  - head: {type: Turn, name: "Retry"}
+    relation: HAS_CANONICAL_TEXT
+    tail: "I'm sorry, I couldn't verify your details. Please try again."
+    quote: '**Retry:** "I''m sorry, I couldn''t verify your details. Please try again."'
+
+  - head: {type: Turn, name: "Maximum retry / failure"}
+    relation: HAS_CANONICAL_TEXT
+    tail: "I'm sorry, I'm unable to authenticate you at this time. I will now connect you to a representative for further assistance."
+    quote: '**Maximum retry / failure:** "I''m sorry, I''m unable to authenticate you at this time.'

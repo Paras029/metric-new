@@ -19,6 +19,7 @@ from typing import Any
 
 import yaml
 
+from metric.accuracy import Accuracy, load_annotation, measure
 from metric.contract.compile import compile_all
 from metric.contract.model import Contract
 from metric.discover.emit import load_observations
@@ -54,6 +55,7 @@ class BuildSpec:
     observations_path: Path | None = None
     catalogue_path: Path | None = None
     seeds_path: Path | None = None
+    annotation_path: Path | None = None
     settings_path: Path | None = None
     fixture_path: Path | None = None
     cache_path: Path | None = None
@@ -87,6 +89,7 @@ class BuildSpec:
             ("observed", "observations_path"),
             ("factors", "catalogue_path"),
             ("seeds", "seeds_path"),
+            ("annotation", "annotation_path"),
             ("settings", "settings_path"),
             ("fixture", "fixture_path"),
         ):
@@ -127,6 +130,9 @@ class Workspace:
         )
         self.catalogue: Catalogue | None = (
             load_catalogue(spec.catalogue_path) if spec.catalogue_path else None
+        )
+        self.annotation = (
+            load_annotation(spec.annotation_path) if spec.annotation_path else None
         )
         self.settings: Settings = replace(
             load_settings(spec.settings_path), **(spec.settings_overrides or {})
@@ -183,6 +189,9 @@ class Workspace:
             seeds=self.seeds,
         )
         self.plan: Plan | None = self._plan()
+        self.accuracy: Accuracy | None = (
+            measure(self.graph, self.schema, self.annotation) if self.annotation else None
+        )
         self.evaluations: tuple[Evaluation, ...] = tuple(
             evaluate_trace(
                 self.graph,
@@ -252,6 +261,8 @@ class Workspace:
         )
         if self.plan is not None:
             _write_json(out_dir / reports.PLAN_FILE, self.plan.as_dict())
+        if self.accuracy is not None:
+            _write_json(out_dir / "accuracy.json", self.accuracy.as_dict())
         if self.evaluations:
             _write_json(
                 out_dir / reports.EVALUATIONS_FILE,
@@ -262,7 +273,7 @@ class Workspace:
         """What the graph implies and what it found, appended to the build report."""
         space = self.space
         caps = self.capabilities["capabilities"]
-        lines = [
+        lines = [*self._accuracy_section(), 
             "## Test space",
             "",
             f"{len(space.scenarios)} bases across {len(space.families)} families, generated "
@@ -315,6 +326,48 @@ class Workspace:
                 f"{evaluation.binding_coverage:.0%} |"
             )
         return ["\n".join(lines)]
+
+    def _accuracy_section(self) -> list[str]:
+        """How right the graph is, first, because everything below assumes it."""
+        found = self.accuracy
+        if found is None:
+            return [
+                "## Accuracy",
+                "",
+                "No annotation is configured, so **nothing checks whether this graph matches "
+                "the source**. Every figure below describes a graph that has not been "
+                "verified against the document it came from.",
+                "",
+            ]
+
+        strict, relaxed, high = found.overall, found.relaxed, found.high_materiality
+        lines = [
+            "## Accuracy",
+            "",
+            f"Against {found.annotation.annotator}"
+            + ("" if found.annotation.independent else " — **not independent**")
+            + ".",
+            "",
+            "| scored | precision | recall | over |",
+            "|---|---|---|---|",
+            f"| strict | {strict.precision:.0%} {strict.precision_interval} | "
+            f"{strict.recall:.0%} {strict.recall_interval} | {strict.actual} facts |",
+            f"| relaxed | {relaxed.precision:.0%} | {relaxed.recall:.0%} | — |",
+            f"| high materiality | {high.precision:.0%} | {high.recall:.0%} | "
+            f"{high.actual} facts |",
+            "",
+        ]
+        lines += [f"- **under gate**: {failure}" for failure in found.failures]
+        if found.invented or found.missed:
+            lines.append(
+                f"- {len(found.invented)} invented, {len(found.missed)} missed, "
+                f"{len(found.naming)} named differently — see `accuracy.json`"
+            )
+        if not found.annotation.independent:
+            lines.append(
+                "- this measurement cannot clear a build: the annotator saw the prompts"
+            )
+        return ["\n".join([*lines, ""])]
 
     def contract_for(self, scenario_id: str) -> Contract | None:
         scenario = next((s for s in self.space.scenarios if s.id == scenario_id), None)

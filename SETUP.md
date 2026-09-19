@@ -12,10 +12,11 @@ git clone https://github.com/Paras029/metric-new && cd metric-new
 python -m venv .venv && source .venv/bin/activate     # Python 3.11 or newer
 pip install -e ".[dev]"
 
-pytest -q                     # 291 tests
+pytest -q                     # 311 tests
 metric bases                  # what this graph can be asked, and what was generated
 metric evaluate --turns       # grade the traces, turn by turn
 metric run --limit 60         # drive the plan against the reference agent
+metric accuracy               # is the graph right? the number everything rests on
 metric ui                     # http://127.0.0.1:8765
 ```
 
@@ -35,6 +36,7 @@ The build writes to `build/`:
 | `questions.yaml` | what the pipeline could not settle — **edit it in place and re-run** |
 | `manifest.json` | build identity: corpus, schema, prompts, model, settings, code |
 | `runs.json` | one record per usable run, ready for `metric attribute` |
+| `accuracy.json` | precision and recall against the annotation, and every disagreement |
 | `report.md` | what went wrong first, then the counts |
 
 ### Python
@@ -219,6 +221,52 @@ metric ui    --corpus corpus.yaml
 and the categories admissible from them. **A category is admissible only if the graph
 exposes the capability it needs** — a policy stating no prohibitions generates no
 prohibition material and says so, rather than reporting a category at zero.
+
+---
+
+## Is the graph right?
+
+Everything else rests on the extraction being correct and no internal check can tell you it is —
+provenance, capability gating and answer recovery all confirm the graph is internally *consistent*,
+which a confidently wrong graph also is.
+
+So somebody reads the corpus and writes down the triples in it:
+
+```yaml
+# annotations/yours.gold.yaml
+corpus: docs/your-policy.md
+annotator: "A. Reviewer, operations"
+independent: true          # did they see the extraction prompts?
+covers: ["3. Operating procedure", "4. Rules"]
+triples:
+  - head: {type: State, name: "Authentication attempts"}
+    relation: USES_TOOL
+    tail: {type: Tool, name: "authenticate_customer"}
+    quote: "Request the information required and call `authenticate_customer`."
+```
+
+```bash
+metric accuracy                 # scores it, lists every disagreement
+metric accuracy --strict        # exit 1 unless the gate is cleared independently
+```
+
+Three things the gate will not do:
+
+- **Treat precision and recall alike.** An invented fact becomes an expectation an agent is failed
+  for meeting; a missing one is a test that does not exist. Precision is gated at 95%,
+  high-materiality precision at 98%, recall at 80%.
+- **Pass on a point estimate.** The interval's lower bound is compared. 100% over sixty facts has a
+  lower bound near 94% and does not clear the 98% bar — which is a statement about how much reading
+  an annotator has to do, worth knowing before commissioning it.
+- **Clear a build on a self-marked annotation.** `independent: false` reports `trustworthy: false`
+  however good the numbers are. Code cannot check who wrote what, so the file declares it and the
+  declaration is printed beside every number.
+
+The shipped `annotations/card_auth.gold.yaml` is marked `independent: false` — it was written by the
+author of the extraction prompts. It demonstrates the machinery and it is not an accuracy gate.
+
+Read the **strict** and **relaxed** numbers together. Relaxed ignores what the *subject* was named;
+a large gap between them means fix canonicalisation, a small one means fix the reading.
 
 ---
 

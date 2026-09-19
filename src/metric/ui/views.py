@@ -36,7 +36,7 @@ def overview(space: Workspace) -> str:
 
     body = [
         "<h1>Build overview</h1>",
-        "<p class='lede'>Policy in, an evidence-grounded graph out, then scenarios and "
+        "<p class='lede'>Policy in, an evidence-grounded graph out, then bases and "
         "verdicts from the same graph. Every number below is one click from the text it "
         "came from.</p>",
         stats(
@@ -45,12 +45,14 @@ def overview(space: Workspace) -> str:
                 ("admitted triples", statuses.get("admitted", 0)),
                 ("awaiting review", statuses.get("review", 0)),
                 ("quarantined", len(result.rejections)),
-                ("scenarios", len(space.space.scenarios)),
+                ("bases", len(space.space.scenarios)),
                 ("runs planned", len(space.plan.variants) if space.plan else "—"),
                 ("open questions", len(open_questions)),
             ]
         ),
     ]
+
+    body.append(_accuracy_panel(space))
 
     identity = result.manifest.identity
     body.append(
@@ -64,6 +66,7 @@ def overview(space: Workspace) -> str:
                     ["prompts", f"<code>{escape(identity.prompts)}</code>"],
                     ["model", escape(identity.model)],
                     ["code", escape(identity.code)],
+                    ["settings", f"<code>{escape(identity.settings)}</code>"],
                 ],
             )
             + "<p class='lede' style='margin:12px 0 0'>The same tuple must mean the same "
@@ -214,6 +217,71 @@ def entity_view(space: Workspace, entity_id: str) -> str:
     )
 
 
+def _accuracy_panel(space: Workspace) -> str:
+    """How right the graph is, against a human reading of the same source.
+
+    Placed above build identity because it is the number everything else depends on. A
+    graph that is internally consistent and wrong passes every other check in here.
+    """
+    found = space.accuracy
+    if found is None:
+        return panel(
+            "Accuracy",
+            "<p class='lede'>No annotation is configured, so nothing checks whether this "
+            "graph matches the source. Every other number on this page describes a graph "
+            "that has not been verified against the document it came from. Add "
+            "<code>annotation:</code> to the corpus file.</p>",
+        )
+
+    strict, relaxed, high = found.overall, found.relaxed, found.high_materiality
+    body = [
+        table(
+            ["scored", "precision", "recall", "over"],
+            [
+                [
+                    "strict",
+                    f"{strict.precision:.0%} <span class='lede'>{strict.precision_interval}</span>",
+                    f"{strict.recall:.0%} <span class='lede'>{strict.recall_interval}</span>",
+                    f"{strict.actual} annotated facts",
+                ],
+                [
+                    "relaxed <span class='lede'>ignoring the subject's name</span>",
+                    f"{relaxed.precision:.0%}",
+                    f"{relaxed.recall:.0%}",
+                    "—",
+                ],
+                [
+                    "high materiality <span class='lede'>can fail an agent</span>",
+                    f"{high.precision:.0%}",
+                    f"{high.recall:.0%}",
+                    f"{high.actual} facts",
+                ],
+            ],
+        )
+    ]
+
+    if not found.annotation.independent:
+        body.append(
+            "<p class='lede'><strong>Not independent.</strong> Annotated by "
+            f"{escape(found.annotation.annotator)}. Whoever wrote the extraction prompts "
+            "already shares the pipeline's reading, so this measures agreement with its own "
+            "assumptions and cannot clear a build however good the numbers are.</p>"
+        )
+    for failure in found.failures:
+        body.append(f"<p>{chip('under gate', 'warn')} {escape(failure)}</p>")
+    if not found.failures and found.trustworthy:
+        body.append(f"<p>{chip('cleared', 'pass')} every gate met on an independent reading.</p>")
+
+    if found.invented:
+        body.append(
+            f"<p class='lede'>{len(found.invented)} facts are in the graph and not in the "
+            f"source; {len(found.missed)} are in the source and not in the graph; "
+            f"{len(found.naming)} were read correctly under a different name. See "
+            "<code>accuracy.json</code>.</p>"
+        )
+    return panel("Accuracy — is the graph right?", "".join(body))
+
+
 def _path(graph: Graph, scenario: Scenario) -> str:
     """How a base reads at a glance: its route, or what it is about."""
     if scenario.steps or scenario.entry:
@@ -229,7 +297,7 @@ def scenarios(space: Workspace) -> str:
 
     rows = [
         [
-            f"<a href='/scenario/{urlquote(s.id)}'><code>{escape(s.id[:8])}</code></a>",
+            f"<a href='/base/{urlquote(s.id)}'><code>{escape(s.id[:8])}</code></a>",
             chip(s.category),
             chip(s.family),
             escape(s.question),
@@ -241,7 +309,7 @@ def scenarios(space: Workspace) -> str:
 
     gaps = []
     if found.truncated:
-        gaps.append("<p><strong>Enumeration was truncated.</strong> The scenarios below are "
+        gaps.append("<p><strong>Enumeration was truncated.</strong> The bases below are "
                     "a prefix of the space, not a cover of it.</p>")
     if found.uncovered:
         gaps.append(f"<p>{len(found.uncovered)} decision branches are still not covered by any "
@@ -305,7 +373,7 @@ def _variants_panel(space: Workspace) -> str:
     if design is None:
         return panel(
             "Variants",
-            "<p class='lede'>No factor catalogue is configured, so every scenario runs once. "
+            "<p class='lede'>No factor catalogue is configured, so every base runs once. "
             "Add <code>factors:</code> to the corpus file to vary how the agent meets each "
             "situation without changing what is required of it.</p>",
         )
@@ -345,8 +413,8 @@ def _variants_panel(space: Workspace) -> str:
         )
     if not any(v.reason == "adverse" for v in design.variants):
         body.append(
-            "<p class='lede'>No scenario gets the extra adverse run yet: that is reserved for "
-            "scenarios whose contract can actually block, and nothing can until it is "
+            "<p class='lede'>No base gets the extra adverse run yet: that is reserved for "
+            "bases whose contract can actually block, and nothing can until it is "
             "approved in review.</p>"
         )
     return panel("Variants", "".join(body))

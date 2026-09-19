@@ -16,7 +16,7 @@ NAV = (
     ("/", "Overview"),
     ("/workflow", "Workflow"),
     ("/graph", "Graph"),
-    ("/scenarios", "Scenarios"),
+    ("/bases", "Bases"),
     ("/evaluations", "Evaluations"),
     ("/quarantine", "Quarantine"),
     ("/questions", "Review"),

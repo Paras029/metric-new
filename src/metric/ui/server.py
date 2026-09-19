@@ -79,6 +79,10 @@ ROUTES: dict[str, Route] = {
     "workflow": _workflow,
     "graph": _graph,
     "entity": _entity,
+    # "bases" is the name everywhere now. The old paths still resolve so a link written
+    # down before the rename does not break.
+    "bases": _scenarios,
+    "base": _scenario,
     "scenarios": _scenarios,
     "scenario": _scenario,
     "evaluations": _evaluations,
@@ -93,8 +97,10 @@ _ACTIVE = {
     "workflow": "/workflow",
     "graph": "/graph",
     "entity": "/graph",
-    "scenarios": "/scenarios",
-    "scenario": "/scenarios",
+    "bases": "/bases",
+    "base": "/bases",
+    "scenarios": "/bases",
+    "scenario": "/bases",
     "evaluations": "/evaluations",
     "trace": "/evaluations",
     "quarantine": "/quarantine",

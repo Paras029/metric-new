@@ -28,6 +28,7 @@ metric bases              # what this graph can be asked, and what was generated
 metric evaluate           # grade the traces on the command line
 metric plan               # the variants each base would be run under
 metric run                # run the plan against an agent and grade every run
+metric accuracy           # score the graph against a human reading of the same source
 metric attribute RUNS     # which factor level made the agent fail, across a cohort
 metric discover TRACE...  # draft a profile and an observed structure from telemetry
 metric settings           # every tunable a build would use, and its digest
@@ -53,6 +54,7 @@ The build writes to `--out`:
 | `graph.json` | admitted triples, canonically sorted, each with its spans and how it was found |
 | `quarantine.json` | every rejected candidate, the criterion it failed, the quote it claimed |
 | `scenarios.json` | the bases, the graph's capabilities, the taxonomy, and the settings used |
+| `accuracy.json` | precision and recall against the annotation, and every disagreement |
 | `plan.json` | the variants each base would be run under |
 | `evaluations.json` | verdicts per trace, and ground truth per turn |
 | `questions.yaml` | what the pipeline could not settle — edit it in place and re-run |
@@ -121,6 +123,7 @@ synthetic benchmark drifting away from production evaluation.
 | `run/` | driving a planned variant against an agent, and the trace that comes back |
 | `attribution.py` | which factor level made the agent fail, and which component |
 | `regression.py` | the same question with the other factors held fixed |
+| `accuracy.py` | is the graph right? precision and recall against a human reading |
 | `settings.py` | every tunable, hashed into build identity |
 | `ui/` | the pages, stdlib server, SVG workflow layout |
 
@@ -183,6 +186,14 @@ The load-bearing ideas, each with the failure it prevents:
   not balance every factor within every other's levels, so a level inherits the failures of the one
   it was paired with. Measured: an agent built to fail under exactly one level produced *five*
   marginal findings and one adjusted one. Both are reported, and the difference is named.
+- **Everything rests on the graph being right, so the graph is measured.** Every other check in
+  here confirms the graph is internally *consistent*, which a confidently wrong graph also is. A
+  person reads the corpus, writes down the triples in it, and precision and recall are reported
+  against that. Precision is gated harder than recall, because an invented fact fails an agent
+  unjustly while a missing one is only a gap — and high-materiality relations harder still.
+- **A self-marked annotation never clears a build.** Written by whoever wrote the prompts, it
+  measures agreement with the pipeline's own assumptions. Code cannot verify independence, so the
+  gold file declares it and the declaration is printed beside every number it produced.
 - **The runner does not know the answer.** It drives a conversation and records a `Trace` — the same
   type a production export produces — and grading happens afterwards, through the same evaluator.
   A harness that both stages a situation and judges it is marking its own homework.
@@ -201,6 +212,8 @@ The load-bearing ideas, each with the failure it prevents:
 | `design/10-reverse-mapping.md` | placing a turn in the graph, the inverse index, and ground truth per turn. **The reverse direction.** |
 | `design/11-bases-enrichment-and-deployment.md` | the base taxonomy, the answer check, the enrichment design space, settings, and SafeChain |
 | `design/12-running-and-attribution.md` | driving a plan against an agent, the four bugs a clean baseline caught, and adjusted attribution |
+| `design/13-accuracy.md` | the accuracy gate, the first measurement, and what it found |
+| `annotations/card_auth.gold.yaml` | a human reading of the working policy — **read its header first** |
 | `SETUP.md` | installing it, running it through SafeChain, and standing up a new use case |
 | `design/01`–`05` | the route there: ontology, failure modes, repo shape, loopholes, GEODE assessment |
 | `grounding/README.md` | index and reading order for the grounding material |
@@ -213,14 +226,23 @@ The load-bearing ideas, each with the failure it prevents:
 Policy to verdict runs end to end in both directions, over two corpora: a policy with traces, and
 traces with no policy. **Plan to attribution now closes too**: `metric run` drives every planned
 variant against an agent and `metric attribute` says which factor level caused the failures.
-291 tests; ruff and `mypy --strict` clean.
+311 tests; ruff and `mypy --strict` clean.
 
 Measured on the card-authentication policy: 6 journey paths become **32 bases across 5 families**,
 each checked by recovering its answer from the triples a second time; 410 planned runs; and an agent
 built to degrade under exactly one factor level is recovered as that level and no other
 (odds ratio 0.012, q < 0.0001, pseudo-R² 0.87).
 
-Not yet built: the independent annotation and accuracy gate — still the critical path, since
-everything rests on the graph being right and nothing here measures that — φp space-filling designs,
-a semantic oracle for paraphrase-permitted language, and the GEODE evaluation. `design/12` §6 lists
-the current limits and §7 the order to take them in.
+**The accuracy gate now exists and the build does not clear it.** Scored against a human reading of
+the card-authentication policy: strict precision 70%, recall 70%; relaxed 75% / 79%; high-materiality
+precision 67% against a 98% bar. The defects are listed, not just counted — 7 invented, 7 missed, 2
+read correctly under a different name. That is the real state of the extraction and every other
+number in this repository sits on top of it.
+
+The annotation was written by the author of the extraction prompts and says so, so it reports
+`trustworthy: false` and cannot clear a build. **Commissioning an independent one is the single
+highest-value thing left**, and it is now a data task rather than a code one.
+
+Also not yet built: φp space-filling designs, interaction terms in the attribution model, a semantic
+oracle for paraphrase-permitted language, and the GEODE evaluation. `design/13` §5 lists the current
+limits.

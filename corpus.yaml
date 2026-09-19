@@ -9,6 +9,11 @@ profile: profiles/card_auth.telemetry.yaml
 fixture: fixtures/card_auth.extraction.json
 factors: catalogs/voice.factors.yaml
 
+# A human reading of the same source, to score the graph against. The measurement
+# everything else rests on: a fact the pipeline invents becomes a test someone is failed
+# for, and no internal check detects an error that was in the source reading itself.
+annotation: annotations/card_auth.gold.yaml
+
 # Every tunable, with the defaults written out. Picked up automatically when it sits
 # beside this file; name another path here to point somewhere else.
 settings: metric.yaml

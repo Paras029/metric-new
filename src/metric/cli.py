@@ -146,6 +146,21 @@ def _parser() -> argparse.ArgumentParser:
     )
     attribute_cmd.set_defaults(run=_run_attribute)
 
+    accuracy_cmd = sub.add_parser(
+        "accuracy", help="score the graph against a human reading of the same source"
+    )
+    accuracy_cmd.add_argument("--corpus", type=Path, default=Path("corpus.yaml"))
+    accuracy_cmd.add_argument("--out", type=Path, default=Path("build"))
+    accuracy_cmd.add_argument(
+        "--annotation", type=Path, help="gold-standard file (default: from the corpus)"
+    )
+    accuracy_cmd.add_argument(
+        "--strict",
+        action="store_true",
+        help="exit non-zero unless the build clears the gate on an independent annotation",
+    )
+    accuracy_cmd.set_defaults(run=_run_accuracy)
+
     settings_cmd = sub.add_parser("settings", help="print the settings a build would use")
     settings_cmd.add_argument("--settings", type=Path, help="settings file (default metric.yaml)")
     settings_cmd.set_defaults(run=_run_settings)
@@ -355,6 +370,82 @@ def _run_run(args: argparse.Namespace) -> int:
     )
     print(f"  wrote {results} — pass it to `metric attribute`")
     return 0
+
+
+def _run_accuracy(args: argparse.Namespace) -> int:
+    """The measurement everything else rests on."""
+    from metric.accuracy import load_annotation, measure
+
+    space = _workspace(args)
+    path = args.annotation or space.spec.annotation_path
+    if path is None:
+        raise ValueError(
+            f"{args.corpus} names no annotation. Without a human reading of the source "
+            "there is nothing to check the graph against"
+        )
+
+    found = measure(space.graph, space.schema, load_annotation(path))
+    annotation = found.annotation
+
+    print(f"{path}  —  annotated by {annotation.annotator}")
+    if not annotation.independent:
+        print(
+            "  NOT INDEPENDENT: the annotator saw the extraction prompts, so this "
+            "measures agreement with the pipeline's own assumptions and cannot clear a "
+            "build however good the numbers are"
+        )
+    print(f"  covers: {', '.join(annotation.covers) or 'unstated'}")
+
+    strict, relaxed = found.overall, found.relaxed
+    print(
+        f"\nstrict   precision {strict.precision:.0%} {strict.precision_interval}   "
+        f"recall {strict.recall:.0%} {strict.recall_interval}   F1 {strict.f1:.2f}"
+    )
+    print(f"relaxed  precision {relaxed.precision:.0%}   recall {relaxed.recall:.0%}   "
+          "(ignoring what the subject was named)")
+    high = found.high_materiality
+    print(
+        f"high     precision {high.precision:.0%}   recall {high.recall:.0%}   "
+        f"over {high.actual} annotated facts that can fail an agent"
+    )
+    if found.span_agreement.predicted:
+        print(
+            f"spans    {found.span_agreement.precision:.0%} of agreed facts cite the "
+            "same sentence the annotator did"
+        )
+
+    if found.naming:
+        print(f"\nread correctly, named differently ({len(found.naming)}):")
+        for item in found.naming:
+            print(f"  {_clip(item)}")
+    if found.invented:
+        print(f"\ninvented — not in the source ({len(found.invented)}):")
+        for head, relation, tail in found.invented:
+            print(f"  {_clip(head)} {relation} {_clip(tail)}")
+    if found.missed:
+        print(f"\nmissed — in the source, not in the graph ({len(found.missed)}):")
+        for head, relation, tail in found.missed:
+            print(f"  {_clip(head)} {relation} {_clip(tail)}")
+    for item in found.near_misses:
+        print(f"\nnear miss: {item}")
+    for note in found.notes:
+        print(f"\nnote: {note}")
+
+    print()
+    for failure in found.failures:
+        print(f"UNDER GATE: {failure}")
+    if not found.failures:
+        print("every gate cleared")
+
+    if args.strict and not found.trustworthy:
+        print("\nnot cleared", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _clip(text: str, limit: int = 70) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1] + "\u2026"
 
 
 def _pair(entry: str) -> tuple[str, str]:
