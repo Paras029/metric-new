@@ -3,9 +3,16 @@
 Ontology-driven agent evaluation for **Metric 2.0** — MRMG independent testing of GenAI and agentic
 use cases.
 
-Policy documents go in. An evidence-grounded triple graph comes out, and from that graph: the
-scenarios worth testing, what policy required at any point of a real conversation, and a verdict on
-whether the agent did it — each one traceable to the sentence of policy behind it.
+Policy documents go in. An evidence-grounded triple graph comes out, and from that graph two
+directions:
+
+- **forward** — the scenarios worth testing, and the contract each one must satisfy;
+- **reverse** — given a real conversation and its telemetry, *where in the graph is each turn, and
+  what did policy require there?*
+
+The reverse direction is the point. A trace binds to the graph, every turn is placed in it, and the
+graph then says which tools belonged there, which outcomes were legal, where it could go next and
+which rules were in force — each traceable to the sentence of policy behind it.
 
 The standard that sets: a fact this pipeline invents becomes a test an agent is failed for. So it
 extracts what the source states, cites it, grades only what the telemetry can actually show, and
@@ -57,14 +64,23 @@ become a new build. Model calls need `ANTHROPIC_API_KEY` or `ant auth login`.
                     scenarios (paths)                                    a trace (OTEL)
                       scenario/                                            trace/ + profile
                              │                                                    │
+                             │                                            place each turn
+                             │                                            trace/states.py
+                             │                                                    │
                              └──────────────► EvaluationContract ◄────────────────┘
-                                   resolve_for_scenario | resolve_for_trace
-                                                  contract/
+                          resolve_for_scenario | resolve_for_trace | resolve_turns
+                                            contract/ · groundtruth.py
                                                        │
                                                        ▼
                                              verdicts, by dimension
                                                   evaluate/
 ```
+
+**Placing a turn** is the hinge of the reverse direction, and it works without the agent's help. Read
+`USES_TOOL` and `HAS_OUTCOME`/`OFFERS_DECISION` backwards and a tool says which states could have
+called it, an outcome says which states could have produced it; intersect with what is reachable from
+the previous turn and usually one survives. Measured on a trace stripped of every checkpoint: **5 of
+6 turns recovered**, and the one that did nothing left unplaced rather than guessed.
 
 One compiler, two entry points. A generated scenario and an observed trace resolve the *same*
 assertions from the *same* graph and differ only in what they narrow to — which is what stops a
@@ -80,7 +96,8 @@ synthetic benchmark drifting away from production evaluation.
 | `reconcile/` | merge, the witness bar, typed conflicts, conditional integrity |
 | `scenario/` | bounded path enumeration, plus a focused path back to every branch it missed |
 | `contract/` | assertions with severity, derivation level and provenance |
-| `trace/` | reading an OTEL export, and binding what it shows to the ontology |
+| `trace/` | reading an OTEL export, binding it to the ontology, and placing each turn in the graph |
+| `groundtruth.py` | what policy required at a turn, against what the turn did |
 | `telemetry/` | the profile: what the ontology is called on the wire |
 | `runtime/` | state, counters and order, replayed from a bound trace |
 | `evaluate/` | one grader per assertion kind, and verdicts by dimension |
@@ -120,6 +137,9 @@ The load-bearing ideas, each with the failure it prevents:
 - **A rule learned by watching an agent cannot fail that agent.** Structure discovered from traces
   enters the graph as `telemetry`, and any assertion resting only on telemetry is forced to
   `advisory` — it would pass by construction, and a verdict that cannot fail is not a verdict.
+- **Only a checkpoint can fail an agent.** A turn the agent placed itself is gradable. A turn we
+  inferred is analysable and forced to advisory — inference is good enough to investigate with and
+  not good enough to accuse with.
 - **Enrichment cannot reach the contract.** A variant changes how the agent meets a situation, never
   what is required of it, so a failure under one level and a pass under another is attributable to
   the level. A factor that *does* change what is required is excluded from the design and named.
@@ -132,6 +152,7 @@ The load-bearing ideas, each with the failure it prevents:
 | `design/07-build-notes.md` | where the ingestion code departs from that design, and why |
 | `design/08-scenarios-contracts-evaluation.md` | scenarios, contracts, trace binding, evaluation and the UI. **Read this second.** |
 | `design/09-discovery-enrichment-and-a-sweep.md` | discovery from traces, the enrichment layer, and what a performance and correctness sweep found |
+| `design/10-reverse-mapping.md` | placing a turn in the graph, the inverse index, and ground truth per turn. **The reverse direction.** |
 | `design/01`–`05` | the route there: ontology, failure modes, repo shape, loopholes, GEODE assessment |
 | `grounding/README.md` | index and reading order for the grounding material |
 | `grounding/06-key-findings-scenario-generator-vs-target.md` | gap analysis against the old Scenario Generator, with `file:line` evidence |
@@ -140,8 +161,8 @@ The load-bearing ideas, each with the failure it prevents:
 
 ## Status
 
-Policy to verdict runs end to end, over two corpora: a policy with traces, and traces with no policy.
-171 tests; ruff and `mypy --strict` clean.
+Policy to verdict runs end to end in both directions, over two corpora: a policy with traces, and
+traces with no policy. 187 tests; ruff and `mypy --strict` clean.
 
 Not yet built: the independent annotation and accuracy gate, a simulator to turn a planned variant
 into an actual run, a semantic oracle for paraphrase-permitted language, fault injection, and the

@@ -148,6 +148,7 @@ class Workspace:
                 trace,
                 identity=self.identity,
                 checkpoint_variable=self.checkpoint_variable,
+                compiled=self.compiled,
             )
             for trace in self.traces
         )

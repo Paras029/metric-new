@@ -16,8 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html import escape
 
+from metric.graph.journey import Journey
 from metric.graph.model import Graph
-from metric.scenario.paths import Journey
 
 BOX_W, BOX_H = 232.0, 56.0
 GAP_X, GAP_Y = 46.0, 104.0

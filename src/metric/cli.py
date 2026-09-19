@@ -11,6 +11,7 @@ from pathlib import Path
 import yaml
 
 from metric import reports, review
+from metric.evaluate.model import Evaluation
 from metric.llm.cache import ResponseCache
 from metric.llm.gateway import AnthropicGateway, Gateway, ModelConfig, ReplayGateway
 from metric.ontology.schema import SchemaError, load_schema
@@ -72,6 +73,9 @@ def _parser() -> argparse.ArgumentParser:
     eval_cmd = sub.add_parser("evaluate", help="grade traces against the policy graph")
     eval_cmd.add_argument("--corpus", type=Path, default=Path("corpus.yaml"))
     eval_cmd.add_argument("--out", type=Path, default=Path("build"))
+    eval_cmd.add_argument(
+        "--turns", action="store_true", help="show what the graph required at each turn"
+    )
     eval_cmd.set_defaults(run=_run_evaluate)
 
     plan_cmd = sub.add_parser("plan", help="show the variants each scenario would be run under")
@@ -214,9 +218,30 @@ def _run_evaluate(args: argparse.Namespace) -> int:
                 f"  FAIL [{verdict.assertion.severity}] "
                 f"{verdict.assertion.kind}: {verdict.detail}"
             )
+        print(
+            f"  {evaluation.certain} of {len(evaluation.turns)} turns placed by the agent "
+            f"itself, {evaluation.placed} placed at all"
+        )
         if evaluation.unbound:
             print(f"  unbound: {', '.join(evaluation.unbound)}")
+        if getattr(args, "turns", False):
+            _print_turns(space, evaluation)
     return 0
+
+
+def _print_turns(space: Workspace, evaluation: Evaluation) -> None:
+    label = space.graph.label
+    for truth in evaluation.turns:
+        binding = truth.binding
+        where = " -> ".join(label(s) for s in binding.states) or "(unplaced)"
+        print(f"    turn {truth.turn} [{binding.method} {binding.confidence:.2f}] {where}")
+        if truth.expected.tools or truth.observed.tools:
+            print(
+                f"      expects {', '.join(label(t) for t in truth.expected.tools) or '-'}"
+                f"  |  did {', '.join(label(t) for t in truth.observed.tools) or '-'}"
+            )
+        for finding in truth.findings:
+            print(f"      ! {finding}")
 
 
 def _workspace(args: argparse.Namespace) -> Workspace:

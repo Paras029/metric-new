@@ -2,7 +2,7 @@
 # says it should do -- so nothing here can fail that agent. It exists to bind traces,
 # to show coverage, and to give whoever writes the real ontology a starting shape.
 version: 1
-name: aop_user_identification
+name: aop
 use_case: AOP User Identification
 checkpoint_variable: checkpoint
 traces:
@@ -42,6 +42,9 @@ variables:
 - numeric_input
 - tfn
 - user_response
+state_tools:
+  check14Key:
+  - check_14key
 evidence:
   User Identification: turn1.step2
   assistant: turn1.step1

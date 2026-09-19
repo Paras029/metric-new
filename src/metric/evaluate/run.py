@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from metric.contract.compile import Compiled
 from metric.contract.model import Contract
 from metric.evaluate.graders import Evidence, grade
 from metric.evaluate.model import Evaluation
 from metric.graph.model import Graph
+from metric.groundtruth import TurnTruth, resolve_turns
 from metric.ontology.schema import Schema
 from metric.resolve import resolve_for_trace
 from metric.runtime.context import replay
@@ -14,7 +16,12 @@ from metric.trace.model import Trace
 
 
 def evaluate(
-    graph: Graph, bound: BoundTrace, contract: Contract, *, checkpoint_variable: str = ""
+    graph: Graph,
+    bound: BoundTrace,
+    contract: Contract,
+    *,
+    checkpoint_variable: str = "",
+    turns: tuple[TurnTruth, ...] = (),
 ) -> Evaluation:
     lexicon = Lexicon(graph, checkpoint_variable=checkpoint_variable)
     evidence = Evidence(graph=graph, bound=bound, context=replay(bound, lexicon))
@@ -23,6 +30,7 @@ def evaluate(
         verdicts=tuple(grade(assertion, evidence) for assertion in contract.assertions),
         binding_coverage=bound.coverage,
         unbound=tuple(sorted({b.token for b in bound.unbound if b.token})),
+        turns=turns,
     )
 
 
@@ -33,6 +41,7 @@ def evaluate_trace(
     *,
     identity: str,
     checkpoint_variable: str = "",
+    compiled: Compiled | None = None,
 ) -> Evaluation:
     """Bind, resolve and grade in one step — the production path.
 
@@ -40,5 +49,11 @@ def evaluate_trace(
     it fails to bind is carried through to the evaluation rather than narrowing it.
     """
     bound = bind(trace, graph, checkpoint_variable=checkpoint_variable)
-    contract = resolve_for_trace(graph, schema, bound, identity=identity)
-    return evaluate(graph, bound, contract, checkpoint_variable=checkpoint_variable)
+    contract = resolve_for_trace(graph, schema, bound, identity=identity, compiled=compiled)
+    return evaluate(
+        graph,
+        bound,
+        contract,
+        checkpoint_variable=checkpoint_variable,
+        turns=resolve_turns(graph, schema, bound, identity=identity, compiled=compiled),
+    )

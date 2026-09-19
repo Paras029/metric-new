@@ -7,7 +7,7 @@
 # Other variables also looked like checkpoints: checkpoint_14key.
 # Only one can be the journey. Change `checkpoint_variable` if this guess is wrong.
 version: 1
-name: aop_user_identification
+name: aop
 use_case: AOP User Identification
 capabilities:
   User Identification: User Identification

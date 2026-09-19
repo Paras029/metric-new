@@ -38,6 +38,7 @@ class Observed:
     written: dict[str, set[str]] = field(default_factory=dict)
     arguments: dict[str, set[str]] = field(default_factory=dict)
     transitions: dict[str, Counter[str]] = field(default_factory=dict)
+    state_tools: dict[str, set[str]] = field(default_factory=dict)
     first_seen: dict[str, str] = field(default_factory=dict)
     traces: list[str] = field(default_factory=list)
 
@@ -86,6 +87,7 @@ class Observed:
             "outcomes": {k: sorted(v) for k, v in sorted(self.outcomes.items())},
             "written": {k: sorted(v) for k, v in sorted(self.written.items())},
             "arguments": {k: sorted(v) for k, v in sorted(self.arguments.items())},
+            "state_tools": {k: sorted(v) for k, v in sorted(self.state_tools.items())},
             "checkpoint_candidates": self.checkpoint_candidates,
         }
 
@@ -101,6 +103,10 @@ def observe(traces: list[Trace]) -> Observed:
 def _read(found: Observed, trace: Trace) -> None:
     last_tool = ""
     previous: dict[str, str] = {}
+    # Which checkpoint was in force when a tool was called. Without this every tool
+    # hangs off the capability and the inverse index is empty, so a turn with no
+    # checkpoint of its own can never be placed.
+    standing = ""
 
     for observation in trace.observations:
         found.first_seen.setdefault(observation.name, observation.ref)
@@ -111,6 +117,8 @@ def _read(found: Observed, trace: Trace) -> None:
         elif observation.kind == "tool_call":
             found.tools[observation.name] += 1
             last_tool = observation.name
+            if standing:
+                found.state_tools.setdefault(standing, set()).add(observation.name)
             for name, value in observation.arguments:
                 found.arguments.setdefault(name, set()).add(value)
 
@@ -124,6 +132,8 @@ def _read(found: Observed, trace: Trace) -> None:
             if earlier is not None and earlier != observation.value:
                 found.transitions.setdefault(earlier, Counter())[observation.value] += 1
             previous[observation.name] = observation.value
+            if _symbolic(observation.value):
+                standing = observation.value
 
 
 def _symbolic(value: str) -> bool:

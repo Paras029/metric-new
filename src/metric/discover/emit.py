@@ -72,6 +72,11 @@ def observation_yaml(found: Observed, *, name: str, use_case: str) -> str:
             if source in found.states(checkpoint) and target in found.states(checkpoint)
         ],
         "variables": sorted(k for k in found.variables if k != checkpoint),
+        "state_tools": {
+            state: sorted(tools)
+            for state, tools in sorted(found.state_tools.items())
+            if state in found.states(checkpoint)
+        },
         "evidence": {k: v for k, v in sorted(found.first_seen.items()) if k},
     }
     return _OBSERVED_HEADER + _dump(document)
@@ -90,6 +95,8 @@ def load_observations(path: Path) -> dict[str, Any]:
     if not document.get("use_case"):
         raise ObservationError(f"{path}: no use_case, so there is nothing to attach these to")
 
+    if "state_tools" in document and not isinstance(document["state_tools"], Mapping):
+        raise ObservationError(f"{path}: state_tools must be a mapping")
     for key in ("capabilities", "tools", "states", "variables", "traces"):
         if key in document and not isinstance(document[key], list):
             raise ObservationError(f"{path}: {key} must be a list")
@@ -162,8 +169,17 @@ def apply_observations(graph: Graph, document: Mapping[str, Any]) -> Graph:
             fact(journey, "STARTS_AT", state, surface=surface)
 
     tools = {t: node("Tool", t) for t in document.get("tools") or ()}
+    attributed = document.get("state_tools") or {}
+    for state_surface, used in attributed.items():
+        if state_surface not in states:
+            continue
+        for surface in used:
+            if surface in tools:
+                fact(states[state_surface], "USES_TOOL", tools[surface], surface=surface)
+
+    placed = {t for used in attributed.values() for t in used}
     for surface, tool in tools.items():
-        if capabilities:
+        if capabilities and surface not in placed:
             fact(anchor, "USES_TOOL", tool, surface=surface)
 
     for token, sources in (document.get("outcomes") or {}).items():

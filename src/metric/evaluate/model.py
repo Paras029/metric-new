@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from metric.contract.model import Assertion, Contract, Dimension
+from metric.groundtruth import TurnTruth
 
 Outcome = Literal["pass", "fail", "undecided", "not_applicable"]
 
@@ -54,6 +55,17 @@ class Evaluation:
     verdicts: tuple[Verdict, ...]
     binding_coverage: float
     unbound: tuple[str, ...]
+    turns: tuple[TurnTruth, ...] = ()
+
+    @property
+    def placed(self) -> int:
+        """Turns the graph could account for. The reverse mapping's own score."""
+        return sum(1 for t in self.turns if t.expected.states)
+
+    @property
+    def certain(self) -> int:
+        """Turns the agent itself placed, which are the only ones that can fail it."""
+        return sum(1 for t in self.turns if t.gradable)
 
     def by_outcome(self, outcome: Outcome) -> tuple[Verdict, ...]:
         return tuple(v for v in self.verdicts if v.outcome == outcome)
@@ -85,9 +97,12 @@ class Evaluation:
             "verdicts": [v.as_dict() for v in self.verdicts],
             "binding_coverage": round(self.binding_coverage, 3),
             "unbound": list(self.unbound),
+            "turns": [t.as_dict() for t in self.turns],
             "summary": {
                 "blocked": self.blocked,
                 "counts": dict(Counter(v.outcome for v in self.verdicts)),
+                "turns_placed": self.placed,
+                "turns_certain": self.certain,
                 "dimensions": {
                     dimension: dict(counts) for dimension, counts in self.by_dimension().items()
                 },

@@ -19,6 +19,7 @@ from urllib.parse import quote as urlquote
 from metric.contract.model import Assertion
 from metric.evaluate.model import Evaluation
 from metric.graph.model import Graph
+from metric.groundtruth import TurnTruth
 from metric.ontology.types import Entity, Question, Rejection, Span, Triple
 from metric.review import outstanding
 from metric.scenario.paths import Scenario
@@ -480,8 +481,9 @@ def _evaluation(space: Workspace, index: int, ev: Evaluation) -> str:
                 ("binding coverage", f"{ev.binding_coverage:.0%}"),
             ]
         )
-        + f"<p class='lede' style='margin-top:14px'><a href='/trace/{index}'>See what the "
-        "run actually did →</a></p>"
+        + f"<p class='lede' style='margin-top:14px'>{ev.certain} of {len(ev.turns)} turns "
+        f"placed by the agent itself, {ev.placed} placed at all. "
+        f"<a href='/trace/{index}'>Turn by turn →</a></p>"
         + unbound
         + table(["verdict", "severity", "check", "subject", "what happened", "policy"], rows),
     )
@@ -491,6 +493,64 @@ def trace_view(space: Workspace, index: int) -> str:
     if index >= len(space.traces):
         return "<h1>Not found</h1><p class='lede'>No trace at that position.</p>"
 
+    turns = space.evaluations[index].turns if index < len(space.evaluations) else ()
+    return "".join(
+        [
+            f"<h1>{escape(space.traces[index].conversation_id)}</h1>",
+            "<p class='lede'>Each turn placed in the graph, and what the graph then said "
+            "should happen there. A turn the agent did not place itself can be analysed but "
+            "cannot fail it.</p>",
+            *(_turn_panel(space, truth) for truth in turns),
+            _observations_panel(space, index),
+        ]
+    )
+
+
+def _turn_panel(space: Workspace, truth: TurnTruth) -> str:
+    graph = space.graph
+    binding = truth.binding
+    def names(ids: tuple[str, ...]) -> str:
+        return ", ".join(graph.label(i) for i in ids) or "—"
+
+    where = " → ".join(
+        f"<a href='/entity/{urlquote(s)}'>{escape(graph.label(s))}</a>" for s in binding.states
+    ) or "<span class='empty'>could not be placed</span>"
+
+    header = (
+        f"{where} &nbsp; {chip(binding.method, 'pass' if binding.certain else 'warn')} "
+        f"{chip(f'confidence {binding.confidence:.2f}')}"
+        + (" " + chip("cannot fail the agent", "idle") if not truth.gradable else "")
+    )
+
+    rows = [
+        ["tools", escape(names(truth.expected.tools)), escape(names(truth.observed.tools))],
+        [
+            "outcomes",
+            escape(names(truth.expected.outcomes)),
+            escape(names(truth.observed.outcomes)),
+        ],
+        ["next", escape(names(truth.expected.next_states)), "—"],
+        ["rules in force", str(len(truth.expected.rules)), "—"],
+    ]
+
+    body = [
+        f"<p>{header}</p>",
+        f"<p class='lede'>{escape(binding.reason)}</p>",
+    ]
+    if truth.observed.heard:
+        body.append(quote(truth.observed.heard, source="heard"))
+    if truth.observed.said:
+        body.append(quote(truth.observed.said[:200], source="said"))
+    body.append(table(["", "the graph expects", "the turn did"], rows))
+    for finding in truth.findings:
+        body.append(f"<p><strong>{escape(finding)}</strong></p>")
+    body.append(
+        f"<p class='lede'>{len(truth.contract.assertions)} assertions in force here.</p>"
+    )
+    return panel(f"Turn {truth.turn}", "".join(body))
+
+
+def _observations_panel(space: Workspace, index: int) -> str:
     from metric.trace.binding import bind
 
     trace = space.traces[index]
@@ -518,13 +578,11 @@ def trace_view(space: Workspace, index: int) -> str:
             ]
         )
 
-    return "".join(
-        [
-            f"<h1>Trace {escape(trace.conversation_id)}</h1>",
-            "<p class='lede'>Every observation, and what it bound to. An unbound row is "
-            "something the agent did that the ontology has no name for.</p>",
-            table(["turn", "kind", "name", "value", "bound to"], rows),
-        ]
+    return panel(
+        "Every observation",
+        "<p class='lede'>What the trace showed, and what it bound to. An unbound row is "
+        "something the agent did that the ontology has no name for.</p>"
+        + table(["turn", "kind", "name", "value", "bound to"], rows),
     )
 
 
