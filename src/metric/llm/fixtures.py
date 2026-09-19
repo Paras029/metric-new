@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -62,7 +63,13 @@ class FixtureGateway:
         return self._identity
 
     def json(
-        self, *, system: str, prompt: str, schema: dict[str, Any], label: str
+        self,
+        *,
+        system: str,
+        prompt: str,
+        schema: dict[str, Any],
+        label: str,
+        images: Sequence[Any] = (),
     ) -> dict[str, Any]:
         self.calls.append(label)
         if label.startswith("glossary"):

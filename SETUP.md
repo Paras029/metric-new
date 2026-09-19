@@ -12,7 +12,7 @@ git clone https://github.com/Paras029/metric-new && cd metric-new
 python -m venv .venv && source .venv/bin/activate     # Python 3.11 or newer
 pip install -e ".[dev]"
 
-pytest -q                     # 330 tests
+pytest -q                     # 362 tests
 metric bases                  # what this graph can be asked, and what was generated
 metric evaluate --turns       # grade the traces, turn by turn
 metric run --limit 60         # drive the plan against the reference agent
@@ -190,6 +190,26 @@ fixate them.
 ```bash
 metric schema --schema schemas/core.ontology.yaml --extend schemas/yours.ontology.yaml
 ```
+
+**2b. The workflow diagram**, if the pack has one. List the image files as documents:
+
+```yaml
+documents:
+  - path: docs/policy.md
+  - path: docs/workflow-1.png      # a long diagram split across pages —
+  - path: docs/workflow-2.png      # list every page, order does not matter
+```
+
+They are read as *structure*, not as prose: each page is enumerated as boxes and arrows, a join pass
+follows an arrow off the edge of one page into the page that picks it up, and an audit of what the
+graph cannot account for goes back with the pictures still attached. Pages are sorted on the digits
+in the filename, so `flow-2` comes before `flow-10`.
+
+Install `metric[image]` so oversized scans can be reduced rather than refused. A reduction is
+reported, because a diagram read at half resolution may have lost its smallest arrow labels.
+
+Worth doing even when the prose already describes the flow: a fact both readings found has two
+witnesses and clears the review bar without a person.
 
 **3. A telemetry profile**, binding the ontology to what the agent actually emits:
 

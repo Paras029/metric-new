@@ -177,6 +177,7 @@ class Workspace:
             profile=self.profile,
             observations=self.observations,
             settings=self.settings,
+            use_case=self.spec.use_case,
         )
         self.graph = self.result.graph
         self.compiled = compile_all(self.graph, self.schema)

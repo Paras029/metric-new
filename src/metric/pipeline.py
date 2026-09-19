@@ -13,7 +13,7 @@ same entity named in two documents is one entity.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +22,10 @@ from metric.admit.gate import admit
 from metric.corpus.manifest import Manifest
 from metric.corpus.passages import read_passages
 from metric.corpus.scope import Scope, apply_scope
+from metric.diagram.images import MEDIA_TYPES as IMAGE_MEDIA_TYPES
+from metric.diagram.images import load_all
+from metric.diagram.read import Reading, read_diagrams
+from metric.diagram.triples import read_into_corpus
 from metric.discover.emit import apply_observations
 from metric.extract.batching import Batch, batch_passages
 from metric.extract.glossary import Glossary, build_glossary
@@ -32,13 +36,22 @@ from metric.llm.gateway import Gateway
 from metric.llm.prompts import prompt_hash
 from metric.ontology.ids import question_id
 from metric.ontology.schema import Schema
-from metric.ontology.types import Document, Passage, Question, Rejection, Triple
+from metric.ontology.types import (
+    Candidate,
+    Document,
+    Passage,
+    Question,
+    Rejection,
+    Triple,
+)
 from metric.refine.inert import Pruned
 from metric.refine.inert import prune as prune_inert
 from metric.refine.names import Refinement
 from metric.refine.names import refine as refine_names
 from metric.settings import Settings
 from metric.telemetry.profile import Profile, apply_profile
+
+IMAGE_SUFFIXES = frozenset(IMAGE_MEDIA_TYPES)
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +99,7 @@ class BuildResult:
     scope_notes: tuple[str, ...] = ()
     refinement: Refinement | None = None
     pruned: Pruned | None = None
+    diagrams: Reading | None = None
 
 
 def ingest(
@@ -97,6 +111,7 @@ def ingest(
     profile: Profile | None = None,
     observations: Mapping[str, Any] | None = None,
     settings: Settings | None = None,
+    use_case: str = "",
 ) -> BuildResult:
     from metric.reconcile.run import reconcile
 
@@ -113,6 +128,9 @@ def ingest(
     effective_dates: dict[str, str] = {}
     batches: list[Batch] = []
     scope_notes: list[str] = []
+
+    diagrams = [spec for spec in specs if _is_image(spec.path)]
+    specs = [spec for spec in specs if not _is_image(spec.path)]
 
     for spec in specs:
         document, found = read_passages(
@@ -135,8 +153,23 @@ def ingest(
             )
         )
 
+    # A diagram is read into structure, not prose: reading a workflow into a paragraph and
+    # asking a later pass to rebuild a graph from that paragraph loses the structure twice
+    # and loses it silently. What was read off each picture becomes a passage of its own so
+    # every fact taken from it still cites a line somebody can check against the image.
+    diagram_read = None
+    if diagrams:
+        diagram_read, diagram_passages, diagram_candidates = _read_diagrams(
+            diagrams, gateway=gateway, use_case=use_case
+        )
+        for passage in diagram_passages:
+            passages[passage.id] = passage
+        scope_notes.extend(diagram_read.notes)
+
     ordered = sorted(passages.values(), key=lambda p: (p.doc_id, p.location, p.id))
     candidates = list(harvest(ordered))
+    if diagram_read is not None:
+        candidates.extend(diagram_candidates)
 
     glossary = build_glossary(batches, gateway=gateway, schema=schema)
     extraction = extract(batches, gateway=gateway, schema=schema, glossary=glossary)
@@ -197,7 +230,31 @@ def ingest(
         scope_notes=tuple(scope_notes),
         refinement=refined,
         pruned=pruned,
+        diagrams=diagram_read,
     )
+
+
+def _is_image(path: Path) -> bool:
+    return path.suffix.lower() in IMAGE_SUFFIXES
+
+
+def _read_diagrams(
+    specs: Sequence[DocumentSpec], *, gateway: Gateway, use_case: str
+) -> tuple[Reading, list[Passage], list[Candidate]]:
+    """Every picture in the corpus, read as one workflow."""
+    images, refused = load_all([spec.path for spec in specs])
+    reading = read_diagrams(images, gateway=gateway)
+    if refused:
+        reading = replace(reading, notes=(*reading.notes, *refused))
+
+    doc = "+".join(spec.path.stem for spec in specs)[:60] or "diagrams"
+    passages, candidates = read_into_corpus(
+        [(name, found) for name, found in reading.per_image if not found.empty]
+        or ([("joined", reading.structure)] if not reading.structure.empty else []),
+        doc_id=doc,
+        use_case=use_case,
+    )
+    return reading, passages, candidates
 
 
 def _inert_question(pruned: Pruned) -> Question:

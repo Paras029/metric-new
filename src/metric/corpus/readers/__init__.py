@@ -41,14 +41,15 @@ def read_document(path: Path) -> list[RawBlock]:
 
         return read_xlsx(path, doc_label=label)
     if suffix in _IMAGE:
-        return [
-            RawBlock(
-                location=f"{label}:image",
-                kind="image",
-                heading_path=(label,),
-                text=str(path),
-            )
-        ]
+        # An image never reaches here: the pipeline sets diagrams aside for the vision
+        # passes, which read a workflow into structure rather than into prose. Reaching
+        # here means something called the text reader on a picture, and the old stub's
+        # answer — a block whose text was the file path — went on to be batched, quoted
+        # and cited as if a path were a sentence.
+        raise UnreadableDocument(
+            f"{path.name} is an image. Diagrams are read by metric.diagram, not as text; "
+            "list it under `documents:` and the pipeline routes it there."
+        )
 
     raise UnreadableDocument(
         f"{path.name}: no reader for {suffix!r}. Supported: markdown, text, pdf, docx, xlsx, image."

@@ -106,7 +106,8 @@ synthetic benchmark drifting away from production evaluation.
 | Package | Responsibility |
 |---|---|
 | `ontology/` | types, content-hash identity, canonical forms, the schema loader |
-| `corpus/` | readers (md, txt, pdf, docx, xlsx, image), furniture stripping, passages, the manifest |
+| `corpus/` | readers (md, txt, pdf, docx, xlsx), section scope, furniture stripping, passages, the manifest |
+| `diagram/` | a workflow read off pictures — one page at a time, joined across pages, then repaired against an audit |
 | `extract/` | deterministic harvest, content-size batching, the frozen glossary, model extraction |
 | `llm/` | the single model call, the response cache, prompts built from the active ontology |
 | `admit/` | quote location and the ordered admission criteria |
@@ -187,6 +188,15 @@ The load-bearing ideas, each with the failure it prevents:
   not balance every factor within every other's levels, so a level inherits the failures of the one
   it was paired with. Measured: an agent built to fail under exactly one level produced *five*
   marginal findings and one adjusted one. Both are reported, and the difference is named.
+- **A workflow diagram is read as structure, not as prose.** Reading a flowchart into a paragraph
+  and asking a later pass to rebuild a graph out of that paragraph loses the structure twice and
+  loses it silently. Each page is enumerated as boxes and arrows, so a box that was missed shows up
+  as an arrow pointing at nothing; a join pass follows an arrow off the edge of one page into the
+  page that picks it up; and an audit of what the graph cannot account for goes back **with the
+  pictures still attached**, as specific holes rather than "read it again".
+- **Two readings of one workflow are two witnesses.** A fact the prose states and the diagram also
+  shows is `llm` + `vision`, which clears the witness bar without a person. Adding the flowchart to a
+  corpus does not only add facts — it promotes ones the prose already carried.
 - **A name is not a sentence.** Policy states rules as sentences, so the extractor named one rule
   three ways and the graph carried three nodes, three assertions and three questions for one fact.
   Labels the source gives are taken deterministically; the rest needs a model, and where none is
@@ -227,6 +237,7 @@ The load-bearing ideas, each with the failure it prevents:
 | `design/12-running-and-attribution.md` | driving a plan against an agent, the four bugs a clean baseline caught, and adjusted attribution |
 | `design/13-accuracy.md` | the accuracy gate, the first measurement, and what it found |
 | `design/14-refinement.md` | why 49 questions became 35, and what a name is |
+| `design/15-diagrams.md` | reading a workflow off pictures, including one split across pages |
 | `annotations/card_auth.gold.yaml` | a human reading of the working policy — **read its header first** |
 | `SETUP.md` | installing it, running it through SafeChain, and standing up a new use case |
 | `design/01`–`05` | the route there: ontology, failure modes, repo shape, loopholes, GEODE assessment |
@@ -240,7 +251,7 @@ The load-bearing ideas, each with the failure it prevents:
 Policy to verdict runs end to end in both directions, over two corpora: a policy with traces, and
 traces with no policy. **Plan to attribution now closes too**: `metric run` drives every planned
 variant against an agent and `metric attribute` says which factor level caused the failures.
-330 tests; ruff and `mypy --strict` clean.
+362 tests; ruff and `mypy --strict` clean.
 
 Measured on the card-authentication policy: 6 journey paths become **32 bases across 5 families**,
 each checked by recovering its answer from the triples a second time; 410 planned runs; and an agent

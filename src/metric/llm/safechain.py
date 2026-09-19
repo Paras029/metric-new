@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from metric.llm.cache import ResponseCache, request_key
@@ -78,9 +78,17 @@ class SafeChainGateway:
         return "&".join(parts)
 
     def json(
-        self, *, system: str, prompt: str, schema: dict[str, Any], label: str
+        self,
+        *,
+        system: str,
+        prompt: str,
+        schema: dict[str, Any],
+        label: str,
+        images: Sequence[Any] = (),
     ) -> dict[str, Any]:
-        payload = build_payload(self._config, system=system, prompt=prompt, schema=schema)
+        payload = build_payload(
+            self._config, system=system, prompt=prompt, schema=schema, images=images
+        )
         key = request_key(payload)
 
         if self._cache is not None:
@@ -88,19 +96,25 @@ class SafeChainGateway:
             if cached is not None:
                 return cached
 
-        response = _parse(self._send(payload, label=label), label=label)
+        response = _parse(self._send(payload, label=label, images=images), label=label)
 
         if self._cache is not None:
             self._cache.put(key, request=payload, response=response)
         return response
 
-    def _send(self, payload: dict[str, Any], *, label: str) -> str:
+    def _send(
+        self, payload: dict[str, Any], *, label: str, images: Sequence[Any] = ()
+    ) -> str:
         client = self._client if self._client is not None else _default_client(self._endpoint)
+        content: Any = payload["prompt"]
+        if images:
+            content = [*(image.as_content() for image in images),
+                       {"type": "text", "text": payload["prompt"]}]
         request = {
             "model": payload["model"],
             "max_tokens": payload["max_tokens"],
             "system": payload["system"],
-            "messages": [{"role": "user", "content": payload["prompt"]}],
+            "messages": [{"role": "user", "content": content}],
             "response_format": {"type": "json_schema", "json_schema": payload["schema"]},
             "metadata": {"app_id": self._app_id, "use_case": self._use_case},
         }

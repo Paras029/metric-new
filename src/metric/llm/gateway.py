@@ -19,6 +19,7 @@ instead, and the build stops.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -54,12 +55,24 @@ class Gateway(Protocol):
     def identity(self) -> str: ...
 
     def json(
-        self, *, system: str, prompt: str, schema: dict[str, Any], label: str
+        self,
+        *,
+        system: str,
+        prompt: str,
+        schema: dict[str, Any],
+        label: str,
+        images: Sequence[Any] = (),
     ) -> dict[str, Any]:
         """Return the model's response as an object validated against `schema`.
 
         `label` names the call site and appears in errors; it never reaches the model,
         so it cannot perturb the request key.
+
+        `images` are attached before the prompt, in the order given, because a workflow
+        split across several pictures is read in the order a person would look at them
+        and the join pass is told to rely on that. Each carries a `digest` and an
+        `as_content()`; only the digest enters the request key, so the cache does not
+        hold a second copy of every megabyte.
         """
         ...
 
@@ -83,9 +96,17 @@ class AnthropicGateway:
         return self._config.identity
 
     def json(
-        self, *, system: str, prompt: str, schema: dict[str, Any], label: str
+        self,
+        *,
+        system: str,
+        prompt: str,
+        schema: dict[str, Any],
+        label: str,
+        images: Sequence[Any] = (),
     ) -> dict[str, Any]:
-        payload = build_payload(self._config, system=system, prompt=prompt, schema=schema)
+        payload = build_payload(
+            self._config, system=system, prompt=prompt, schema=schema, images=images
+        )
         key = request_key(payload)
 
         if self._cache is not None:
@@ -93,21 +114,27 @@ class AnthropicGateway:
             if cached is not None:
                 return cached
 
-        response = self._call(payload, label=label)
+        response = self._call(payload, label=label, images=images)
 
         if self._cache is not None:
             self._cache.put(key, request=payload, response=response)
         return response
 
-    def _call(self, payload: dict[str, Any], *, label: str) -> dict[str, Any]:
+    def _call(
+        self, payload: dict[str, Any], *, label: str, images: Sequence[Any] = ()
+    ) -> dict[str, Any]:
         import json as _json
 
         client = self._client or _default_client()
+        content: Any = payload["prompt"]
+        if images:
+            content = [*(image.as_content() for image in images),
+                       {"type": "text", "text": payload["prompt"]}]
         message = client.messages.create(
             model=payload["model"],
             max_tokens=payload["max_tokens"],
             system=payload["system"],
-            messages=[{"role": "user", "content": payload["prompt"]}],
+            messages=[{"role": "user", "content": content}],
             output_config={
                 "effort": payload["effort"],
                 "format": {"type": "json_schema", "schema": payload["schema"]},
@@ -152,9 +179,19 @@ class ReplayGateway:
         return self._config.identity
 
     def json(
-        self, *, system: str, prompt: str, schema: dict[str, Any], label: str
+        self,
+        *,
+        system: str,
+        prompt: str,
+        schema: dict[str, Any],
+        label: str,
+        images: Sequence[Any] = (),
     ) -> dict[str, Any]:
-        key = request_key(build_payload(self._config, system=system, prompt=prompt, schema=schema))
+        key = request_key(
+            build_payload(
+                self._config, system=system, prompt=prompt, schema=schema, images=images
+            )
+        )
         cached = self._cache.get(key)
         if cached is None:
             raise CacheMiss(f"{label}: no recorded response for request {key[:12]}")
@@ -162,9 +199,20 @@ class ReplayGateway:
 
 
 def build_payload(
-    config: ModelConfig, *, system: str, prompt: str, schema: dict[str, Any]
+    config: ModelConfig,
+    *,
+    system: str,
+    prompt: str,
+    schema: dict[str, Any],
+    images: Sequence[Any] = (),
 ) -> dict[str, Any]:
-    return {
+    """What the request is, for the cache key and for the call.
+
+    Images enter as digests rather than as bytes. The key still changes when a picture
+    changes, and the cache does not end up holding a second copy of every megabyte it
+    was asked about.
+    """
+    payload: dict[str, Any] = {
         "model": config.model,
         "effort": config.effort,
         "max_tokens": config.max_tokens,
@@ -172,6 +220,9 @@ def build_payload(
         "prompt": prompt,
         "schema": schema,
     }
+    if images:
+        payload["images"] = [image.digest for image in images]
+    return payload
 
 
 def _default_client() -> Any:
