@@ -1,0 +1,16 @@
+# AOP User Identification: traces, and no policy document.
+#
+# This is the honest state of that use case. We have real production telemetry and no
+# operating procedure, so the graph here is *observed* — drafted by `metric discover`
+# from the traces themselves. It binds the trace, shows what the agent does and gives
+# whoever writes the real ontology a starting shape. It cannot fail the agent: an
+# expectation learned from watching something passes by construction, and the compiler
+# refuses to let it block.
+schema: schemas/core.ontology.yaml
+profile: profiles/aop.telemetry.yaml
+observed: observed/aop.observed.yaml
+
+documents: []
+
+traces:
+  - grounding/03-otel-trace-sample-galileo.json

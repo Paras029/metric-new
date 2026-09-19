@@ -35,6 +35,7 @@ covered.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import cast
 
 from metric.contract.model import Assertion, AssertionKind, Contract, Dimension, Level, Severity
@@ -44,6 +45,30 @@ from metric.ontology.schema import CheckSpec, Schema
 from metric.ontology.types import Span, Triple
 
 _MAX_EVIDENCE = 4
+
+
+@dataclass(frozen=True, slots=True)
+class Compiled:
+    """Every assertion a graph yields, compiled once.
+
+    Compilation reads the whole graph; narrowing to one scenario reads a list. Keeping
+    them apart means a hundred scenarios cost one compilation and a hundred filters
+    rather than a hundred compilations.
+    """
+
+    assertions: tuple[Assertion, ...]
+    notes: tuple[str, ...]
+
+    def narrow(self, scope: Sequence[str] | None) -> tuple[Assertion, ...]:
+        if scope is None:
+            return self.assertions
+        wanted = set(scope)
+        return tuple(a for a in self.assertions if _in_scope(a, wanted))
+
+
+def compile_all(graph: Graph, schema: Schema) -> Compiled:
+    assertions, notes = compile_assertions(graph, schema)
+    return Compiled(assertions=tuple(assertions), notes=tuple(notes))
 
 
 def compile_assertions(graph: Graph, schema: Schema) -> tuple[list[Assertion], list[str]]:
@@ -75,6 +100,7 @@ def build_contract(
     identity: str,
     binding: str,
     scope: Sequence[str] | None = None,
+    compiled: Compiled | None = None,
 ) -> Contract:
     """Compile, then narrow to `scope` if one is given.
 
@@ -82,18 +108,16 @@ def build_contract(
     holds for the whole journey holds on every path through it, and dropping it
     because the path does not mention it is how a scenario quietly stops testing the
     rule that matters most.
-    """
-    assertions, notes = compile_assertions(graph, schema)
-    if scope is not None:
-        wanted = set(scope)
-        assertions = [a for a in assertions if _in_scope(a, wanted)]
 
+    Pass `compiled` to reuse a compilation across many contracts from one graph.
+    """
+    prepared = compiled or compile_all(graph, schema)
     return Contract(
         id=assertion_id("contract", binding, identity),
         binding=binding,
         identity=identity,
-        assertions=tuple(assertions),
-        notes=tuple(notes),
+        assertions=prepared.narrow(scope),
+        notes=prepared.notes,
     )
 
 
@@ -140,9 +164,15 @@ def _assertion(
     expected: Sequence[str],
     sources: Sequence[Triple],
 ) -> Assertion:
-    provisional = any(t.status == "review" for t in sources)
+    observed_only = bool(sources) and all(t.methods == {"telemetry"} for t in sources)
+    provisional = observed_only or any(t.status == "review" for t in sources)
     severity = _severity(graph, rule, relation, sources, provisional)
     note = ""
+    if observed_only:
+        note = (
+            "learned from watching this agent, so it cannot fail it — an expectation "
+            "derived from behaviour passes by construction"
+        )
 
     if rule.kind == "text_required":
         allowed = graph.out(subject, "GENERATION_ALLOWED")
@@ -153,7 +183,7 @@ def _assertion(
             severity = "info" if severity == "warning" else severity
             note = "the policy does not say whether paraphrase is permitted"
 
-    if provisional:
+    if provisional and not observed_only:
         note = (note + " " if note else "") + (
             "rests on an extraction awaiting review, so it advises rather than blocks"
         )

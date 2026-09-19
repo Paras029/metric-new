@@ -1,0 +1,48 @@
+# How a voice customer can meet the same situation.
+#
+# A factor varies presentation; the policy situation and its contract stay fixed. That
+# separation is what makes a failure attributable: if a scenario passes at clarity=clear
+# and fails at clarity=garbled, the transcript is the cause, and nothing had to be
+# relabelled to find that out.
+#
+# `adverse` names the level that stresses the agent most. Scenarios whose contract can
+# block get one extra run with every factor at its adverse level.
+#
+# `invariant: false` means the factor changes what is *required*, not just how it is
+# presented. Those are separate situations and get their own base scenario; the planner
+# excludes them and says so rather than mixing them in.
+version: 1
+name: voice
+
+factors:
+  - name: clarity
+    group: query
+    levels: [clear, hesitant, garbled]
+    adverse: garbled
+    description: how intelligibly the customer states what they want
+
+  - name: asr
+    group: channel
+    levels: [clean, mild_noise, heavy_noise]
+    adverse: heavy_noise
+    description: transcription quality, which the production traces show is a dominant real condition
+
+  - name: persona
+    group: persona
+    levels: [cooperative, impatient, confused]
+    adverse: confused
+    description: how the customer behaves across turns
+
+  - name: history
+    group: conversation
+    levels: [none, prior_turns]
+    adverse: prior_turns
+    description: whether the journey starts cold or after unrelated conversation
+
+  # Changes what is required of the agent (detect, recover, escalate), so it is a
+  # different situation rather than a different presentation of the same one.
+  - name: tool_fault
+    group: system
+    levels: [none, timeout, malformed_output]
+    invariant: false
+    description: a tool failing mid-journey

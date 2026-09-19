@@ -18,7 +18,7 @@ to be a divergence in scope, which is one comparison away from being visible.
 
 from __future__ import annotations
 
-from metric.contract.compile import build_contract
+from metric.contract.compile import Compiled, build_contract
 from metric.contract.model import Contract
 from metric.graph.model import Graph
 from metric.ontology.schema import Schema
@@ -27,7 +27,12 @@ from metric.trace.binding import BoundTrace
 
 
 def resolve_for_scenario(
-    graph: Graph, schema: Schema, scenario: Scenario, *, identity: str
+    graph: Graph,
+    schema: Schema,
+    scenario: Scenario,
+    *,
+    identity: str,
+    compiled: Compiled | None = None,
 ) -> Contract:
     """What policy requires of a generated journey."""
     return build_contract(
@@ -36,11 +41,17 @@ def resolve_for_scenario(
         identity=identity,
         binding=f"scenario:{scenario.id}",
         scope=scenario.entities,
+        compiled=compiled,
     )
 
 
 def resolve_for_trace(
-    graph: Graph, schema: Schema, bound: BoundTrace, *, identity: str
+    graph: Graph,
+    schema: Schema,
+    bound: BoundTrace,
+    *,
+    identity: str,
+    compiled: Compiled | None = None,
 ) -> Contract:
     """What policy required of the journey this trace actually took.
 
@@ -55,4 +66,5 @@ def resolve_for_trace(
         identity=identity,
         binding=f"trace:{bound.trace.conversation_id}",
         scope=tuple(sorted(observed)),
+        compiled=compiled,
     )

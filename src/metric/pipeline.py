@@ -15,11 +15,13 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from metric import __version__
 from metric.admit.gate import admit
 from metric.corpus.manifest import Manifest
 from metric.corpus.passages import read_passages
+from metric.discover.emit import apply_observations
 from metric.extract.batching import Batch, batch_passages
 from metric.extract.glossary import Glossary, build_glossary
 from metric.extract.harvest import harvest
@@ -77,6 +79,7 @@ def ingest(
     gateway: Gateway,
     decisions: Mapping[str, str] | None = None,
     profile: Profile | None = None,
+    observations: Mapping[str, Any] | None = None,
 ) -> BuildResult:
     from metric.reconcile.run import reconcile
 
@@ -121,6 +124,9 @@ def ingest(
     )
 
     graph = reconciled.graph
+    if observations is not None:
+        graph = apply_observations(graph, observations)
+
     profile_problems: tuple[str, ...] = ()
     if profile is not None:
         graph, problems = apply_profile(graph, profile)

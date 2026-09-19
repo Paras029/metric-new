@@ -74,6 +74,21 @@ def _parser() -> argparse.ArgumentParser:
     eval_cmd.add_argument("--out", type=Path, default=Path("build"))
     eval_cmd.set_defaults(run=_run_evaluate)
 
+    plan_cmd = sub.add_parser("plan", help="show the variants each scenario would be run under")
+    plan_cmd.add_argument("--corpus", type=Path, default=Path("corpus.yaml"))
+    plan_cmd.add_argument("--out", type=Path, default=Path("build"))
+    plan_cmd.set_defaults(run=_run_plan)
+
+    discover_cmd = sub.add_parser(
+        "discover", help="draft a telemetry profile and an observed structure from traces"
+    )
+    discover_cmd.add_argument("traces", nargs="+", type=Path)
+    discover_cmd.add_argument("--name", required=True, help="short name for the files written")
+    discover_cmd.add_argument("--use-case", required=True, help="what this agent is called")
+    discover_cmd.add_argument("--profile-out", type=Path, help="where to write the profile")
+    discover_cmd.add_argument("--observed-out", type=Path, help="where to write the structure")
+    discover_cmd.set_defaults(run=_run_discover)
+
     return parser
 
 
@@ -122,6 +137,56 @@ def _run_ingest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_plan(args: argparse.Namespace) -> int:
+    space = _workspace(args)
+    design = space.plan
+    if design is None:
+        raise ValueError(f"{args.corpus} names no factor catalogue, so there is nothing to plan")
+
+    scenarios = len(space.space.scenarios)
+    each = len(design.variants) // max(1, scenarios)
+    print(f"{scenarios} scenarios x {each} = {len(design.variants)} runs")
+    print(
+        f"  pairwise coverage {design.pairs_covered}/{design.pairs_total}"
+        + ("" if design.complete else "  INCOMPLETE")
+    )
+    for note in design.excluded:
+        print(f"  excluded: {note}")
+    adverse = [v for v in design.variants if v.reason == "adverse"]
+    print(f"  {len(adverse)} adverse runs (scenarios whose contract can block)")
+    return 0
+
+
+def _run_discover(args: argparse.Namespace) -> int:
+    from metric.discover.emit import observation_yaml, profile_yaml
+    from metric.discover.observe import observe
+    from metric.trace.galileo import read_galileo_export
+
+    found = observe([read_galileo_export(path) for path in args.traces])
+    profile_out = args.profile_out or Path(f"profiles/{args.name}.telemetry.yaml")
+    observed_out = args.observed_out or Path(f"observed/{args.name}.observed.yaml")
+
+    for path, text in (
+        (profile_out, profile_yaml(found, name=args.name, use_case=args.use_case)),
+        (observed_out, observation_yaml(found, name=args.name, use_case=args.use_case)),
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        print(f"wrote {path}")
+
+    checkpoint = found.checkpoint_variable()
+    print(
+        f"  {len(found.tools)} tools, {len(found.outcomes)} outcomes, "
+        f"{len(found.capabilities)} capabilities, "
+        f"{len(found.states(checkpoint))} states from `{checkpoint or 'no checkpoint variable'}`"
+    )
+    others = [c for c in found.checkpoint_candidates if c != checkpoint]
+    if others:
+        print(f"  other checkpoint candidates: {', '.join(others)}")
+    print("  these describe the agent, not policy — nothing here can fail it")
+    return 0
+
+
 def _run_ui(args: argparse.Namespace) -> int:
     from metric.ui.server import serve
 
@@ -134,6 +199,7 @@ def _run_evaluate(args: argparse.Namespace) -> int:
     if not space.evaluations:
         raise ValueError(f"{args.corpus} lists no traces to evaluate")
 
+    space.write(args.out)
     for evaluation in space.evaluations:
         counts = Counter(v.outcome for v in evaluation.verdicts)
         print(f"{evaluation.contract.binding}")

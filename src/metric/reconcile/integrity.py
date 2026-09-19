@@ -205,12 +205,7 @@ def _outcome_name_collisions(graph: Graph) -> list[Question]:
 
 
 def _evidence_for(graph: Graph, entity: str) -> tuple[Span, ...]:
-    spans = [
-        span
-        for triple in graph.live
-        if entity in (triple.head, triple.tail)
-        for span in triple.spans
-    ]
+    spans = [span for triple in graph.touching(entity) for span in triple.spans]
     return tuple(spans[:4])
 
 

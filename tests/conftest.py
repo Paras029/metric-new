@@ -88,6 +88,13 @@ def built(tmp_path_factory: pytest.TempPathFactory) -> Workspace:
     return Workspace(BuildSpec.from_corpus(REPO / "corpus.yaml", out_dir=out))
 
 
+@pytest.fixture(scope="session")
+def aop(tmp_path_factory: pytest.TempPathFactory) -> Workspace:
+    """The AOP workspace: real traces, no policy document, an observed graph."""
+    out = tmp_path_factory.mktemp("aop")
+    return Workspace(BuildSpec.from_corpus(REPO / "corpus-aop.yaml", out_dir=out))
+
+
 @pytest.fixture()
 def reviewable(tmp_path: Path) -> Workspace:
     """A fresh workspace with its own questions file, for tests that answer questions."""

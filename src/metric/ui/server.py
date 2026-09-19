@@ -57,6 +57,10 @@ def _trace(space: Workspace, query: dict[str, str], rest: list[str]) -> tuple[st
     return "Trace", views.trace_view(space, _int(rest[0] if rest else "0"))
 
 
+def _quarantine(space: Workspace, query: dict[str, str], rest: list[str]) -> tuple[str, str]:
+    return "Quarantine", views.quarantine(space)
+
+
 def _questions(space: Workspace, query: dict[str, str], rest: list[str]) -> tuple[str, str]:
     return "Review", views.questions(space)
 
@@ -79,6 +83,7 @@ ROUTES: dict[str, Route] = {
     "scenario": _scenario,
     "evaluations": _evaluations,
     "trace": _trace,
+    "quarantine": _quarantine,
     "questions": _questions,
     "passage": _passage,
 }
@@ -92,6 +97,7 @@ _ACTIVE = {
     "scenario": "/scenarios",
     "evaluations": "/evaluations",
     "trace": "/evaluations",
+    "quarantine": "/quarantine",
     "questions": "/questions",
     "passage": "/graph",
 }

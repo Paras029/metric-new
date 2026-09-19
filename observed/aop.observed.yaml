@@ -1,0 +1,58 @@
+# Drafted by `metric discover`. This is what an agent was seen to do, not what policy
+# says it should do -- so nothing here can fail that agent. It exists to bind traces,
+# to show coverage, and to give whoever writes the real ontology a starting shape.
+version: 1
+name: aop_user_identification
+use_case: AOP User Identification
+checkpoint_variable: checkpoint
+traces:
+- 70871984-b053-4448-9b01-6ca57c3279ea
+capabilities:
+- User Identification
+tools:
+- check_14key
+- check_ANI
+- check_fullssn_or_cm15
+- dtmf_4ssn
+- dtmf_tool
+- initialize_session
+- start_session
+outcomes:
+  NO_PREFERENCE_SHARED:
+  - check_fullssn_or_cm15
+  NO_USER_RESPONSE:
+  - check_14key
+  - check_fullssn_or_cm15
+  PROFILE_NO_MATCH:
+  - check_ANI
+  SESSION_STARTED:
+  - initialize_session
+  UNKNOWN:
+  - check_fullssn_or_cm15
+states:
+- check14Key
+transitions: []
+variables:
+- callerPhoneNumber
+- channel_type
+- check_fullssn_or_cm15_called
+- check_fullssn_or_cm15_response
+- checkpoint_14key
+- no_user_pref_counter
+- numeric_input
+- tfn
+- user_response
+evidence:
+  User Identification: turn1.step2
+  assistant: turn1.step1
+  check_14key: turn3.step6
+  check_ANI: turn0.step2
+  check_fullssn_or_cm15: turn1.step5
+  check_fullssn_or_cm15_called: turn1.step3
+  checkpoint: turn3.step5
+  checkpoint_14key: turn3.step7
+  dtmf_4ssn: turn3.step8
+  dtmf_tool: turn1.step4
+  initialize_session: turn0.step3
+  start_session: turn0.step1
+  user: turn2.step1

@@ -6,6 +6,7 @@ schema: schemas/core.ontology.yaml
 extend: schemas/card_auth.ontology.yaml
 profile: profiles/card_auth.telemetry.yaml
 fixture: fixtures/card_auth.extraction.json
+factors: catalogs/voice.factors.yaml
 
 documents:
   - path: grounding/07-card-authentication-policy.md

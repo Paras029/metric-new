@@ -18,8 +18,15 @@ pip install -e ".[dev]"
 
 metric ui                 # browse the build, review it, grade traces — http://127.0.0.1:8765
 metric evaluate           # the same thing on the command line
+metric plan               # the variants each scenario would be run under
+metric discover TRACE...  # draft a profile and an observed structure from telemetry
 metric schema --schema schemas/core.ontology.yaml --extend schemas/card_auth.ontology.yaml
 ```
+
+Two corpora ship with the repo. `corpus.yaml` is the card-authentication policy: a document, an
+ontology, a telemetry profile, traces and a factor catalogue. `corpus-aop.yaml` is the opposite and
+equally real case — production traces for an agent with no operating procedure, where the graph is
+*observed* rather than declared and therefore cannot fail the agent it came from.
 
 `corpus.yaml` says what to ingest, which ontology to read it with, which telemetry profile binds it
 to a live agent, and which traces to grade. It points at a recorded extraction, so the whole thing
@@ -77,6 +84,8 @@ synthetic benchmark drifting away from production evaluation.
 | `telemetry/` | the profile: what the ontology is called on the wire |
 | `runtime/` | state, counters and order, replayed from a bound trace |
 | `evaluate/` | one grader per assertion kind, and verdicts by dimension |
+| `discover/` | traces in, a draft profile and observed structure out |
+| `enrich/` | the factor catalogue and a pairwise design over it |
 | `ui/` | the pages, stdlib server, SVG workflow layout |
 
 The load-bearing ideas, each with the failure it prevents:
@@ -108,6 +117,12 @@ The load-bearing ideas, each with the failure it prevents:
 - **Nothing blocks until a person approves it.** An expectation resting on a single unreviewed model
   reading is `advisory` and cannot fail an agent. Approving it in the review queue is what makes it
   able to.
+- **A rule learned by watching an agent cannot fail that agent.** Structure discovered from traces
+  enters the graph as `telemetry`, and any assertion resting only on telemetry is forced to
+  `advisory` — it would pass by construction, and a verdict that cannot fail is not a verdict.
+- **Enrichment cannot reach the contract.** A variant changes how the agent meets a situation, never
+  what is required of it, so a failure under one level and a pass under another is attributable to
+  the level. A factor that *does* change what is required is excluded from the design and named.
 
 ## Documents
 
@@ -116,6 +131,7 @@ The load-bearing ideas, each with the failure it prevents:
 | `design/06-ingestion-v1.md` | the design being built |
 | `design/07-build-notes.md` | where the ingestion code departs from that design, and why |
 | `design/08-scenarios-contracts-evaluation.md` | scenarios, contracts, trace binding, evaluation and the UI. **Read this second.** |
+| `design/09-discovery-enrichment-and-a-sweep.md` | discovery from traces, the enrichment layer, and what a performance and correctness sweep found |
 | `design/01`–`05` | the route there: ontology, failure modes, repo shape, loopholes, GEODE assessment |
 | `grounding/README.md` | index and reading order for the grounding material |
 | `grounding/06-key-findings-scenario-generator-vs-target.md` | gap analysis against the old Scenario Generator, with `file:line` evidence |
@@ -124,11 +140,9 @@ The load-bearing ideas, each with the failure it prevents:
 
 ## Status
 
-Policy to verdict runs end to end and is tested against the working policy, a synthetic run of that
-policy, and a real production trace from a different agent. 138 tests; ruff and `mypy --strict`
-clean.
+Policy to verdict runs end to end, over two corpora: a policy with traces, and traces with no policy.
+171 tests; ruff and `mypy --strict` clean.
 
-Not yet built: an ontology and profile for the agent we have real traces of, the independent
-annotation and accuracy gate, enrichment and DOE, a semantic oracle for paraphrase-permitted
-language, fault injection, and the GEODE evaluation. `design/08` §7 lists the known limits and §8 the
-order to take them in.
+Not yet built: the independent annotation and accuracy gate, a simulator to turn a planned variant
+into an actual run, a semantic oracle for paraphrase-permitted language, fault injection, and the
+GEODE evaluation. `design/09` §4 lists the current limits and §5 the order to take them in.

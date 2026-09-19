@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from metric import review
@@ -26,6 +26,9 @@ QUARANTINE_FILE = "quarantine.json"
 QUESTIONS_FILE = "questions.yaml"
 MANIFEST_FILE = "manifest.json"
 REPORT_FILE = "report.md"
+SCENARIOS_FILE = "scenarios.json"
+PLAN_FILE = "plan.json"
+EVALUATIONS_FILE = "evaluations.json"
 
 
 def write_build(
@@ -33,6 +36,7 @@ def write_build(
     out_dir: Path,
     *,
     decisions: Mapping[str, Decision] | None = None,
+    sections: Sequence[str] = (),
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     decisions = decisions or {}
@@ -51,10 +55,17 @@ def write_build(
         + "\n",
         encoding="utf-8",
     )
-    (out_dir / REPORT_FILE).write_text(render(result, decisions=decisions), encoding="utf-8")
+    (out_dir / REPORT_FILE).write_text(
+        render(result, decisions=decisions, sections=sections), encoding="utf-8"
+    )
 
 
-def render(result: BuildResult, *, decisions: Mapping[str, Decision] | None = None) -> str:
+def render(
+    result: BuildResult,
+    *,
+    decisions: Mapping[str, Decision] | None = None,
+    sections: Sequence[str] = (),
+) -> str:
     decisions = decisions or {}
     identity = result.manifest.identity
     open_questions = review.outstanding(result.questions, decisions)
@@ -77,6 +88,8 @@ def render(result: BuildResult, *, decisions: Mapping[str, Decision] | None = No
     lines += _graph(result)
     lines += _questions(result, open_questions)
     lines += _glossary(result)
+    for section in sections:
+        lines += ["", section]
     return "\n".join(lines).rstrip() + "\n"
 
 

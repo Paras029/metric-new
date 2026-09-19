@@ -19,7 +19,7 @@ from urllib.parse import quote as urlquote
 from metric.contract.model import Assertion
 from metric.evaluate.model import Evaluation
 from metric.graph.model import Graph
-from metric.ontology.types import Entity, Question, Span, Triple
+from metric.ontology.types import Entity, Question, Rejection, Span, Triple
 from metric.review import outstanding
 from metric.scenario.paths import Scenario
 from metric.ui import html, layout
@@ -45,6 +45,7 @@ def overview(space: Workspace) -> str:
                 ("awaiting review", statuses.get("review", 0)),
                 ("quarantined", len(result.rejections)),
                 ("scenarios", len(space.space.scenarios)),
+                ("runs planned", len(space.plan.variants) if space.plan else "—"),
                 ("open questions", len(open_questions)),
             ]
         ),
@@ -71,16 +72,24 @@ def overview(space: Workspace) -> str:
     )
 
     coverage = result.coverage
-    lines = [
-        f"{coverage.batches} sections read, {coverage.non_normative} reported as carrying "
-        f"no facts, {coverage.rereads} read twice after returning nothing."
-    ]
+    if not result.manifest.documents:
+        lines = [
+            "<strong>No policy document.</strong> This graph was drafted from telemetry, so "
+            "it describes what the agent does rather than what it should do — and nothing in "
+            "it can fail that agent. Adding the real operating procedure is what turns it "
+            "into ground truth."
+        ]
+    else:
+        lines = [
+            f"{coverage.batches} sections read, {coverage.non_normative} reported as carrying "
+            f"no facts, {coverage.rereads} read twice after returning nothing."
+        ]
     if coverage.silent:
         lines.append(
             f"<strong>{len(coverage.silent)} sections stayed silent</strong> after a second "
             "read — they produced no facts and did not claim to contain none."
         )
-    else:
+    elif result.manifest.documents:
         lines.append("No section was left silently unread.")
     if result.profile_problems:
         lines.append("Telemetry profile: " + "; ".join(escape(p) for p in result.profile_problems))
@@ -248,9 +257,51 @@ def scenarios(space: Workspace) -> str:
             "back to any branch the walk missed. Open one to see the contract it would be "
             "tested against.</p>",
             panel("Coverage", "".join(gaps)),
+            _variants_panel(space),
             table(["id", "origin", "category", "steps", "path", "ending"], rows),
         ]
     )
+
+
+def _variants_panel(space: Workspace) -> str:
+    design = space.plan
+    if design is None:
+        return panel(
+            "Variants",
+            "<p class='lede'>No factor catalogue is configured, so every scenario runs once. "
+            "Add <code>factors:</code> to the corpus file to vary how the agent meets each "
+            "situation without changing what is required of it.</p>",
+        )
+
+    catalogue = space.catalogue
+    factors = catalogue.invariant if catalogue else ()
+    body = [
+        f"<p>{len(design.variants)} runs from {len(space.space.scenarios)} scenarios. "
+        f"Pairwise coverage {design.pairs_covered} of {design.pairs_total} level pairs"
+        + ("." if design.complete else " — <strong>incomplete</strong>.")
+        + "</p>",
+        table(
+            ["factor", "group", "levels", "hardest"],
+            [
+                [
+                    escape(f.name),
+                    chip(f.group),
+                    escape(", ".join(f.levels)),
+                    escape(f.adverse) or "—",
+                ]
+                for f in factors
+            ],
+        ),
+    ]
+    for note in design.excluded:
+        body.append(f"<p class='lede'>{escape(note)}</p>")
+    if not any(v.reason == "adverse" for v in design.variants):
+        body.append(
+            "<p class='lede'>No scenario gets the extra adverse run yet: that is reserved for "
+            "scenarios whose contract can actually block, and nothing can until it is "
+            "approved in review.</p>"
+        )
+    return panel("Variants", "".join(body))
 
 
 def scenario_view(space: Workspace, scenario_id: str) -> str:
@@ -278,7 +329,26 @@ def scenario_view(space: Workspace, scenario_id: str) -> str:
             f"{len(contract.assertions)} assertions resolved from this path.</p>",
             panel("Path", table(["#", "state", "decision", "outcome", "next"], steps)),
             panel("Contract", _assertions(space, contract.assertions)),
+            _scenario_variants(space, scenario_id),
         ]
+    )
+
+
+def _scenario_variants(space: Workspace, scenario_id: str) -> str:
+    if space.plan is None:
+        return ""
+    variants = space.plan.for_scenario(scenario_id)
+    if not variants:
+        return ""
+    return panel(
+        "Runs",
+        "<p class='lede'>Same situation, same contract, different presentation. A failure "
+        "under one of these and a pass under another is attributable to the difference.</p>"
+        + table(
+            ["why", "levels"],
+            [[chip(v.reason, "warn" if v.reason == "adverse" else ""), escape(v.summary)]
+             for v in variants],
+        ),
     )
 
 
@@ -295,6 +365,46 @@ def evaluations(space: Workspace) -> str:
          "telemetry cannot hold an agent to.</p>"]
         + [_evaluation(space, index, ev) for index, ev in enumerate(space.evaluations)]
     )
+
+
+def quarantine(space: Workspace) -> str:
+    rejections = space.result.rejections
+    if not rejections:
+        return (
+            "<h1>Quarantine</h1><p class='lede'>Nothing was rejected. On a first build that "
+            "usually means the extractor is being asked for too little, not that it is "
+            "perfect.</p>"
+        )
+
+    by_criterion: dict[str, list[Rejection]] = {}
+    for rejection in rejections:
+        by_criterion.setdefault(rejection.criterion, []).append(rejection)
+
+    blocks = [
+        "<h1>Quarantine</h1>",
+        "<p class='lede'>Every candidate that did not become a fact, and the criterion it "
+        "failed. This is where a broken extractor is found — a criterion suddenly rejecting "
+        "far more than it used to is the signal.</p>",
+    ]
+    for criterion, group in sorted(by_criterion.items()):
+        rows = [
+            [
+                escape(r.candidate.head[:60]),
+                f"<code>{escape(r.candidate.relation)}</code>",
+                escape(r.candidate.tail[:50]),
+                chip(r.candidate.method),
+                escape(r.detail),
+                quote(r.candidate.quote[:160]),
+            ]
+            for r in group[:80]
+        ]
+        blocks.append(
+            panel(
+                f"{criterion} ({len(group)})",
+                table(["subject", "relation", "object", "how", "why", "claimed quote"], rows),
+            )
+        )
+    return "".join(blocks)
 
 
 def questions(space: Workspace) -> str:
@@ -504,6 +614,7 @@ __all__ = [
     "html",
     "overview",
     "passage_view",
+    "quarantine",
     "questions",
     "scenario_view",
     "scenarios",

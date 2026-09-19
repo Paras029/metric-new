@@ -18,6 +18,7 @@ NAV = (
     ("/graph", "Graph"),
     ("/scenarios", "Scenarios"),
     ("/evaluations", "Evaluations"),
+    ("/quarantine", "Quarantine"),
     ("/questions", "Review"),
 )
 

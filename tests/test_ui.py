@@ -39,7 +39,7 @@ class TestViewsRender:
     @pytest.mark.parametrize(
         "view",
         [views.overview, views.workflow, views.graph_view, views.scenarios,
-         views.evaluations, views.questions],
+         views.evaluations, views.quarantine, views.questions],
     )
     def test_a_view_produces_a_whole_page(self, built, view) -> None:
         html = page("t", "/", built.identity, view(built))
@@ -65,10 +65,25 @@ class TestViewsRender:
     def test_a_missing_entity_does_not_explode(self, built) -> None:
         assert "Not found" in views.entity_view(built, "Tool:nothing")
 
+    def test_the_variants_panel_names_the_excluded_factor(self, built) -> None:
+        rendered = views.scenarios(built)
+        assert "tool_fault" in rendered
+        assert "pairwise coverage" in rendered.lower()
+
+    def test_a_scenario_shows_the_runs_it_would_get(self, built) -> None:
+        rendered = views.scenario_view(built, built.space.scenarios[0].id)
+        assert "clarity=" in rendered
+
+    def test_an_observed_graph_renders_without_a_policy_document(self, aop) -> None:
+        assert "<main>" not in views.overview(aop)  # the view is a fragment, not a page
+        assert views.workflow(aop)
+        assert views.evaluations(aop)
+
 
 class TestServer:
     @pytest.mark.parametrize(
-        "path", ["/", "/workflow", "/graph", "/scenarios", "/evaluations", "/questions"]
+        "path",
+        ["/", "/workflow", "/graph", "/scenarios", "/evaluations", "/quarantine", "/questions"],
     )
     def test_every_page_answers(self, client, path) -> None:
         _, port = client

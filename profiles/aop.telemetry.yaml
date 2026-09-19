@@ -1,0 +1,40 @@
+# Drafted by `metric discover` from 70871984-b053-4448-9b01-6ca57c3279ea.
+#
+# Every name maps to itself to start with. Rename the left-hand side to whatever the
+# ontology calls the thing; the right-hand side is what the agent emits and must stay
+# exactly as observed.
+#
+# Other variables also looked like checkpoints: checkpoint_14key.
+# Only one can be the journey. Change `checkpoint_variable` if this guess is wrong.
+version: 1
+name: aop_user_identification
+use_case: AOP User Identification
+capabilities:
+  User Identification: User Identification
+tools:
+  check_14key: check_14key
+  check_ANI: check_ANI
+  check_fullssn_or_cm15: check_fullssn_or_cm15
+  dtmf_4ssn: dtmf_4ssn
+  dtmf_tool: dtmf_tool
+  initialize_session: initialize_session
+  start_session: start_session
+outcomes:
+  NO_PREFERENCE_SHARED: NO_PREFERENCE_SHARED
+  NO_USER_RESPONSE: NO_USER_RESPONSE
+  PROFILE_NO_MATCH: PROFILE_NO_MATCH
+  SESSION_STARTED: SESSION_STARTED
+  UNKNOWN: UNKNOWN
+states:
+  check14Key: check14Key
+variables:
+  callerPhoneNumber: callerPhoneNumber
+  channel_type: channel_type
+  check_fullssn_or_cm15_called: check_fullssn_or_cm15_called
+  check_fullssn_or_cm15_response: check_fullssn_or_cm15_response
+  checkpoint_14key: checkpoint_14key
+  no_user_pref_counter: no_user_pref_counter
+  numeric_input: numeric_input
+  tfn: tfn
+  user_response: user_response
+checkpoint_variable: checkpoint

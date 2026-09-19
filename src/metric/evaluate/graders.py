@@ -43,6 +43,15 @@ class Evidence:
     def states_observed(self) -> bool:
         return bool(self.bound.entities("State"))
 
+    @property
+    def tool_of_span(self) -> dict[str, str | None]:
+        """Which Tool each observed span name bound to, resolved once."""
+        return {
+            b.observation.name: b.entity
+            for b in self.bound.of_kind("tool_call")
+            if b.observation.name
+        }
+
     def refs(self, *entities: str) -> tuple[str, ...]:
         wanted = set(entities)
         return tuple(
@@ -93,10 +102,11 @@ def _tool_called(assertion: Assertion, evidence: Evidence) -> Verdict:
 
 def _outcome_allowed(assertion: Assertion, evidence: Evidence) -> Verdict:
     tool = assertion.subject
+    returned_by = evidence.tool_of_span
     observed = [
         b
         for b in evidence.bound.of_kind("outcome")
-        if b.observation.name and _same_tool(b.observation.name, tool, evidence)
+        if b.observation.name and returned_by.get(b.observation.name) == tool
     ]
     if not observed:
         return verdict(
@@ -319,13 +329,6 @@ def _observable_targets(assertion: Assertion, evidence: Evidence) -> list[str]:
             continue
         targets.extend(t.tail for t in evidence.graph.out(target, "INVOKES"))
     return sorted(set(targets))
-
-
-def _same_tool(observed_name: str, tool: str, evidence: Evidence) -> bool:
-    for binding in evidence.bound.of_kind("tool_call"):
-        if binding.observation.name == observed_name:
-            return binding.entity == tool
-    return False
 
 
 GRADERS: dict[str, Grader] = {

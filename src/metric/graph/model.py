@@ -1,25 +1,36 @@
 """The graph, and the few lookups everything downstream needs.
 
-Held in memory as sorted tuples rather than an index, because a build's graph is
-thousands of triples, not millions, and a canonical sort is what makes two builds
-byte-comparable. When that stops being true the store changes; nothing else has to.
+Canonically sorted tuples are the storage, because that sort is what makes two builds
+byte-comparable. The lookups are indexed on top of them: a linear scan per `label()`
+is quadratic over a page render, and measurably so — at three thousand entities the
+scans alone cost more than the entire build.
+
+The indexes are derived, never part of identity. `as_dict` and equality see the tuples
+only, so an index can never make two graphs that should be identical differ.
 """
 
 from __future__ import annotations
 
 import json
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from metric.ontology.types import Entity, Triple
+
+_LIVE = frozenset({"admitted", "review"})
 
 
 @dataclass(frozen=True, slots=True)
 class Graph:
     entities: tuple[Entity, ...]
     triples: tuple[Triple, ...]
+
+    _index: _Index = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "_index", _Index(self.entities, self.triples))
 
     @property
     def admitted(self) -> tuple[Triple, ...]:
@@ -32,31 +43,33 @@ class Graph:
 
         The traversals below read this rather than `admitted`, because a fact held for
         review is still a fact the build found, and integrity questions about it are
-        exactly what a reviewer needs alongside it. Only `conflicted` and `superseded`
-        triples drop out.
+        exactly what a reviewer needs alongside it. Only `conflicted`, `superseded` and
+        `rejected` triples drop out.
         """
-        return tuple(t for t in self.triples if t.status in {"admitted", "review"})
+        return self._index.live
 
     def entity(self, entity_id: str) -> Entity | None:
-        return next((e for e in self.entities if e.id == entity_id), None)
+        return self._index.by_id.get(entity_id)
 
     def label(self, entity_id: str) -> str:
         """A human-readable name for an id, falling back to the id itself."""
-        found = self.entity(entity_id)
-        return sorted(found.surfaces)[0] if found and found.surfaces else entity_id
+        return self._index.labels.get(entity_id, entity_id)
 
     def by_relation(self, relation: str) -> tuple[Triple, ...]:
-        return tuple(t for t in self.live if t.relation == relation)
+        return self._index.by_relation.get(relation, ())
 
     def out(self, head: str, relation: str | None = None) -> tuple[Triple, ...]:
-        return tuple(
-            t
-            for t in self.live
-            if t.head == head and (relation is None or t.relation == relation)
-        )
+        leaving = self._index.out.get(head, ())
+        if relation is None:
+            return leaving
+        return tuple(t for t in leaving if t.relation == relation)
 
     def ids_of_type(self, entity_type: str) -> tuple[str, ...]:
-        return tuple(e.id for e in self.entities if e.type == entity_type)
+        return self._index.by_type.get(entity_type, ())
+
+    def touching(self, entity_id: str) -> tuple[Triple, ...]:
+        """Every live triple this entity appears in, on either side."""
+        return self._index.touching.get(entity_id, ())
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -85,6 +98,50 @@ class Graph:
             for e in data["entities"]
         )
         return cls(entities=entities, triples=tuple(Triple.from_dict(t) for t in data["triples"]))
+
+
+@dataclass(frozen=True, slots=True)
+class _Index:
+    """Derived lookups. Built once per graph, never part of what a graph *is*."""
+
+    by_id: dict[str, Entity]
+    labels: dict[str, str]
+    by_type: dict[str, tuple[str, ...]]
+    live: tuple[Triple, ...]
+    by_relation: dict[str, tuple[Triple, ...]]
+    out: dict[str, tuple[Triple, ...]]
+    touching: dict[str, tuple[Triple, ...]]
+
+    def __init__(self, entities: tuple[Entity, ...], triples: tuple[Triple, ...]) -> None:
+        by_id: dict[str, Entity] = {}
+        labels: dict[str, str] = {}
+        by_type: dict[str, list[str]] = {}
+        for entity in entities:
+            by_id[entity.id] = entity
+            labels[entity.id] = sorted(entity.surfaces)[0] if entity.surfaces else entity.id
+            by_type.setdefault(entity.type, []).append(entity.id)
+
+        live = tuple(t for t in triples if t.status in _LIVE)
+        by_relation: dict[str, list[Triple]] = {}
+        out: dict[str, list[Triple]] = {}
+        touching: dict[str, list[Triple]] = {}
+        for triple in live:
+            by_relation.setdefault(triple.relation, []).append(triple)
+            out.setdefault(triple.head, []).append(triple)
+            touching.setdefault(triple.head, []).append(triple)
+            if triple.tail_kind == "entity":
+                touching.setdefault(triple.tail, []).append(triple)
+
+        for name, value in (
+            ("by_id", by_id),
+            ("labels", labels),
+            ("by_type", {k: tuple(v) for k, v in by_type.items()}),
+            ("live", live),
+            ("by_relation", {k: tuple(v) for k, v in by_relation.items()}),
+            ("out", {k: tuple(v) for k, v in out.items()}),
+            ("touching", {k: tuple(v) for k, v in touching.items()}),
+        ):
+            object.__setattr__(self, name, value)
 
 
 def build(entities: Iterable[Entity], triples: Iterable[Triple]) -> Graph:
