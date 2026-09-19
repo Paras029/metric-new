@@ -36,9 +36,6 @@ def overview(space: Workspace) -> str:
 
     body = [
         "<h1>Build overview</h1>",
-        "<p class='lede'>Policy in, an evidence-grounded graph out, then bases and "
-        "verdicts from the same graph. Every number below is one click from the text it "
-        "came from.</p>",
         stats(
             [
                 ("entities", len(graph.entities)),
@@ -69,9 +66,7 @@ def overview(space: Workspace) -> str:
                     ["settings", f"<code>{escape(identity.settings)}</code>"],
                 ],
             )
-            + "<p class='lede' style='margin:12px 0 0'>The same tuple must mean the same "
-            "graph. A verdict that cannot name the build it came from cannot be reopened "
-            "when the policy changes.</p>",
+,
         )
     )
 
@@ -117,9 +112,8 @@ def workflow(space: Workspace) -> str:
     return "".join(
         [
             "<h1>Workflow</h1>",
-            "<p class='lede'>States and the transitions between them. A dashed outline is an "
-            "entry, a heavy one an ending, a dashed curve to the right is a loop back. The "
-            "number on a state is how many rules govern it — hover to read them.</p>",
+            "<p class='lede'>dashed outline: entry &middot; heavy outline: ending &middot; "
+            "dashed curve: loop back &middot; number: rules governing it, hover to read</p>",
             f"<div class='panel'>{layout.render(space.graph)}</div>",
         ]
     )
@@ -167,9 +161,8 @@ def graph_view(space: Workspace, *, relation: str = "", status: str = "") -> str
     return "".join(
         [
             "<h1>Graph</h1>",
-            "<p class='lede'>Every fact the build holds, with the words it came from. "
-            "<code>review</code> means it rests on a single model reading and can only "
-            "advise until somebody confirms it.</p>",
+            "<p class='lede'><code>review</code>: rests on one model reading, advises "
+            "only until confirmed.</p>",
             f"<div class='panel'>{filters}</div>",
             note,
             table(["subject", "relation", "object", "status", "how", "evidence"], rows),
@@ -262,10 +255,8 @@ def _accuracy_panel(space: Workspace) -> str:
 
     if not found.annotation.independent:
         body.append(
-            "<p class='lede'><strong>Not independent.</strong> Annotated by "
-            f"{escape(found.annotation.annotator)}. Whoever wrote the extraction prompts "
-            "already shares the pipeline's reading, so this measures agreement with its own "
-            "assumptions and cannot clear a build however good the numbers are.</p>"
+            f"<p class='lede'><strong>Not independent</strong> — annotated by "
+            f"{escape(found.annotation.annotator)}, so it cannot clear a build.</p>"
         )
     for failure in found.failures:
         body.append(f"<p>{chip('under gate', 'warn')} {escape(failure)}</p>")
@@ -325,10 +316,6 @@ def scenarios(space: Workspace) -> str:
     return "".join(
         [
             "<h1>Bases</h1>",
-            "<p class='lede'>Every situation this graph can be asked about, one generator "
-            "per category the graph has the capability to support. Each one's answer was "
-            "recovered from the triples a second time before it was admitted. Open one to "
-            "see the contract it would be tested against.</p>",
             _capability_panel(space),
             panel("Coverage", "".join(gaps)),
             _variants_panel(space),
@@ -343,9 +330,6 @@ def _capability_panel(space: Workspace) -> str:
     caps = space.capabilities["capabilities"]
 
     body = [
-        "<p class='lede'>A category is admissible only if the graph exposes the capability "
-        "it needs. A policy that states no prohibitions generates no prohibition material "
-        "and says so, rather than reporting a category at zero.</p>",
         table(
             ["category", "bases"],
             [[escape(name), str(count)] for name, count in found.coverage.items()],
@@ -413,9 +397,8 @@ def _variants_panel(space: Workspace) -> str:
         )
     if not any(v.reason == "adverse" for v in design.variants):
         body.append(
-            "<p class='lede'>No base gets the extra adverse run yet: that is reserved for "
-            "bases whose contract can actually block, and nothing can until it is "
-            "approved in review.</p>"
+            "<p class='lede'>No adverse runs: no contract can block until approved in "
+            "review.</p>"
         )
     return panel("Variants", "".join(body))
 
@@ -472,9 +455,7 @@ def _scenario_variants(space: Workspace, scenario_id: str) -> str:
         return ""
     return panel(
         "Runs",
-        "<p class='lede'>Same situation, same contract, different presentation. A failure "
-        "under one of these and a pass under another is attributable to the difference.</p>"
-        + table(
+table(
             ["why", "levels"],
             [[chip(v.reason, "warn" if v.reason == "adverse" else ""), escape(v.summary)]
              for v in variants],
@@ -490,9 +471,8 @@ def evaluations(space: Workspace) -> str:
         )
     return "".join(
         ["<h1>Evaluations</h1>",
-         "<p class='lede'>What policy required of a real run, and what the run actually did. "
-         "<em>undecided</em> is the number to watch: it is how much of the policy this "
-         "telemetry cannot hold an agent to.</p>"]
+         "<p class='lede'><em>undecided</em> is how much of the policy this telemetry "
+         "cannot hold an agent to.</p>"]
         + [_evaluation(space, index, ev) for index, ev in enumerate(space.evaluations)]
     )
 
@@ -501,9 +481,7 @@ def quarantine(space: Workspace) -> str:
     rejections = space.result.rejections
     if not rejections:
         return (
-            "<h1>Quarantine</h1><p class='lede'>Nothing was rejected. On a first build that "
-            "usually means the extractor is being asked for too little, not that it is "
-            "perfect.</p>"
+            "<h1>Quarantine</h1><p class='lede'>Nothing was rejected.</p>"
         )
 
     by_criterion: dict[str, list[Rejection]] = {}
@@ -512,9 +490,8 @@ def quarantine(space: Workspace) -> str:
 
     blocks = [
         "<h1>Quarantine</h1>",
-        "<p class='lede'>Every candidate that did not become a fact, and the criterion it "
-        "failed. This is where a broken extractor is found — a criterion suddenly rejecting "
-        "far more than it used to is the signal.</p>",
+        "<p class='lede'>Criteria run in order; the one named is the first that rejected "
+        "it.</p>",
     ]
     for criterion, group in sorted(by_criterion.items()):
         rows = [
@@ -548,9 +525,8 @@ def questions(space: Workspace) -> str:
 
     blocks = [
         "<h1>Review</h1>",
-        "<p class='lede'>Approving an expectation is the moment it stops advising and "
-        "becomes able to fail an agent. Every answer is written to "
-        "<code>questions.yaml</code> and the build is redone immediately.</p>",
+        "<p class='lede'>Approve &rarr; it can fail an agent. Reject &rarr; it leaves the "
+        "graph. Answers go to <code>questions.yaml</code>; the build is redone at once.</p>",
     ]
     for kind, group in sorted(by_kind.items()):
         rows = [
@@ -626,9 +602,8 @@ def trace_view(space: Workspace, index: int) -> str:
     return "".join(
         [
             f"<h1>{escape(space.traces[index].conversation_id)}</h1>",
-            "<p class='lede'>Each turn placed in the graph, and what the graph then said "
-            "should happen there. A turn the agent did not place itself can be analysed but "
-            "cannot fail it.</p>",
+            "<p class='lede'>Only a turn the agent placed itself can fail it; the rest "
+            "are analysis.</p>",
             *(_turn_panel(space, truth) for truth in turns),
             _observations_panel(space, index),
         ]
@@ -709,8 +684,8 @@ def _observations_panel(space: Workspace, index: int) -> str:
 
     return panel(
         "Every observation",
-        "<p class='lede'>What the trace showed, and what it bound to. An unbound row is "
-        "something the agent did that the ontology has no name for.</p>"
+        "<p class='lede'><em>unbound</em>: the agent did something the ontology has no "
+        "name for.</p>"
         + table(["turn", "kind", "name", "value", "bound to"], rows),
     )
 

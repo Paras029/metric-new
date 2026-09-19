@@ -78,6 +78,8 @@ class BuildSpec:
                 path=root / str(entry["path"]),
                 policy_version=str(entry.get("policy_version", "")),
                 effective_date=str(entry.get("effective_date", "")),
+                sections=tuple(str(s) for s in entry.get("sections") or ()),
+                skip_sections=tuple(str(s) for s in entry.get("skip_sections") or ()),
             )
             for entry in document.get("documents") or ()
         )

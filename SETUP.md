@@ -12,7 +12,7 @@ git clone https://github.com/Paras029/metric-new && cd metric-new
 python -m venv .venv && source .venv/bin/activate     # Python 3.11 or newer
 pip install -e ".[dev]"
 
-pytest -q                     # 311 tests
+pytest -q                     # 330 tests
 metric bases                  # what this graph can be asked, and what was generated
 metric evaluate --turns       # grade the traces, turn by turn
 metric run --limit 60         # drive the plan against the reference agent
@@ -156,7 +156,19 @@ The two worth knowing about:
 
 Five files, in the order you will write them.
 
-**1. A corpus file.** Copy `corpus.yaml`. It says what to ingest and what to grade.
+**1. A corpus file.** Copy `corpus.yaml`. It says what to ingest and what to grade — including
+*which sections are policy*:
+
+```yaml
+documents:
+  - path: docs/your-policy.md
+    skip_sections: ["Appendix", "Revision history"]
+    # or, positively:  sections: ["3", "4", "5"]
+```
+
+Worth doing before anything else. A preamble, a change log or a summary written in the same
+imperative voice as the policy will be read as policy — this repository's own notes about its
+working corpus produced eight rules that governed nothing and asked eight questions.
 
 **2. An ontology extension.** Core (`schemas/core.ontology.yaml`) has 41 relations and
 rarely needs changing. A use case adds its own in a file of the same shape:

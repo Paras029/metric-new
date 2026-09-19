@@ -124,6 +124,7 @@ synthetic benchmark drifting away from production evaluation.
 | `attribution.py` | which factor level made the agent fail, and which component |
 | `regression.py` | the same question with the other factors held fixed |
 | `accuracy.py` | is the graph right? precision and recall against a human reading |
+| `refine/` | names that read as names, and rules that assert nothing |
 | `settings.py` | every tunable, hashed into build identity |
 | `ui/` | the pages, stdlib server, SVG workflow layout |
 
@@ -186,6 +187,18 @@ The load-bearing ideas, each with the failure it prevents:
   not balance every factor within every other's levels, so a level inherits the failures of the one
   it was paired with. Measured: an agent built to fail under exactly one level produced *five*
   marginal findings and one adjusted one. Both are reported, and the difference is named.
+- **A name is not a sentence.** Policy states rules as sentences, so the extractor named one rule
+  three ways and the graph carried three nodes, three assertions and three questions for one fact.
+  Labels the source gives are taken deterministically; the rest needs a model, and where none is
+  available the names are reported rather than mangled.
+- **A rule that asserts nothing is a recall defect, not a question.** Nine rules carried only their
+  own text and a severity — nothing governed by them, nothing required, forbidden or bounded. They
+  could never have been checked against anything. They leave the graph, and *one* question names all
+  of them, because nine identical questions is not nine decisions.
+- **What is policy is a fact about the corpus, not a judgement for a model.** This repository's own
+  notes about why the working policy is a good first corpus are written in the same imperative voice
+  as the policy, and the extractor read eight Rules out of them. `skip_sections:` in the corpus file
+  is where that belongs.
 - **Everything rests on the graph being right, so the graph is measured.** Every other check in
   here confirms the graph is internally *consistent*, which a confidently wrong graph also is. A
   person reads the corpus, writes down the triples in it, and precision and recall are reported
@@ -213,6 +226,7 @@ The load-bearing ideas, each with the failure it prevents:
 | `design/11-bases-enrichment-and-deployment.md` | the base taxonomy, the answer check, the enrichment design space, settings, and SafeChain |
 | `design/12-running-and-attribution.md` | driving a plan against an agent, the four bugs a clean baseline caught, and adjusted attribution |
 | `design/13-accuracy.md` | the accuracy gate, the first measurement, and what it found |
+| `design/14-refinement.md` | why 49 questions became 35, and what a name is |
 | `annotations/card_auth.gold.yaml` | a human reading of the working policy — **read its header first** |
 | `SETUP.md` | installing it, running it through SafeChain, and standing up a new use case |
 | `design/01`–`05` | the route there: ontology, failure modes, repo shape, loopholes, GEODE assessment |
@@ -226,7 +240,7 @@ The load-bearing ideas, each with the failure it prevents:
 Policy to verdict runs end to end in both directions, over two corpora: a policy with traces, and
 traces with no policy. **Plan to attribution now closes too**: `metric run` drives every planned
 variant against an agent and `metric attribute` says which factor level caused the failures.
-311 tests; ruff and `mypy --strict` clean.
+330 tests; ruff and `mypy --strict` clean.
 
 Measured on the card-authentication policy: 6 journey paths become **32 bases across 5 families**,
 each checked by recovering its answer from the triples a second time; 410 planned runs; and an agent

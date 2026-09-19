@@ -29,6 +29,14 @@ documents:
   - path: grounding/07-card-authentication-policy.md
     policy_version: poc-1
     effective_date: "2026-01-15"
+    # This file carries the policy *and* this repository's own notes about why it is a
+    # good first corpus — including a table of which ingestion problem each section
+    # exercises. Those notes are written in the same imperative voice as the policy, so
+    # the extractor read eight Rules out of them: well-formed, correctly cited, governing
+    # nothing, and one human question each. What is policy is a fact about the document,
+    # so it is stated here rather than left for a model to infer.
+    skip_sections:
+      - "Why this document is a good phase-1 target"
 
 traces:
   - fixtures/card_auth.trace.json

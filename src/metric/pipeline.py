@@ -21,6 +21,7 @@ from metric import __version__
 from metric.admit.gate import admit
 from metric.corpus.manifest import Manifest
 from metric.corpus.passages import read_passages
+from metric.corpus.scope import Scope, apply_scope
 from metric.discover.emit import apply_observations
 from metric.extract.batching import Batch, batch_passages
 from metric.extract.glossary import Glossary, build_glossary
@@ -29,8 +30,13 @@ from metric.extract.triples import extract
 from metric.graph.model import Graph
 from metric.llm.gateway import Gateway
 from metric.llm.prompts import prompt_hash
+from metric.ontology.ids import question_id
 from metric.ontology.schema import Schema
-from metric.ontology.types import Document, Passage, Question, Rejection
+from metric.ontology.types import Document, Passage, Question, Rejection, Triple
+from metric.refine.inert import Pruned
+from metric.refine.inert import prune as prune_inert
+from metric.refine.names import Refinement
+from metric.refine.names import refine as refine_names
 from metric.settings import Settings
 from metric.telemetry.profile import Profile, apply_profile
 
@@ -40,6 +46,12 @@ class DocumentSpec:
     path: Path
     policy_version: str = ""
     effective_date: str = ""
+    sections: tuple[str, ...] = ()
+    skip_sections: tuple[str, ...] = ()
+
+    @property
+    def scope(self) -> Scope:
+        return Scope(include=self.sections, exclude=self.skip_sections)
 
     @property
     def title(self) -> str:
@@ -71,6 +83,9 @@ class BuildResult:
     glossary: Glossary
     passages: dict[str, Passage] = field(default_factory=dict)
     profile_problems: tuple[str, ...] = ()
+    scope_notes: tuple[str, ...] = ()
+    refinement: Refinement | None = None
+    pruned: Pruned | None = None
 
 
 def ingest(
@@ -97,6 +112,7 @@ def ingest(
     passages: dict[str, Passage] = {}
     effective_dates: dict[str, str] = {}
     batches: list[Batch] = []
+    scope_notes: list[str] = []
 
     for spec in specs:
         document, found = read_passages(
@@ -105,6 +121,10 @@ def ingest(
             effective_date=spec.effective_date,
         )
         manifest.add(document)
+        scoped = apply_scope(found, spec.scope)
+        found = list(scoped.passages)
+        if scoped.note:
+            scope_notes.append(f"{spec.path.name}: {scoped.note}")
         _register(found, document, passages=passages, effective_dates=effective_dates)
         batches.extend(
             batch_passages(
@@ -128,9 +148,19 @@ def ingest(
     rejections = [*extraction.rejections, *admission.rejections]
     results = extraction.results
 
-    reconciled = reconcile(
+    # Names before identity: renaming an entity changes its content hash, so this has to
+    # happen before reconciliation folds triples together by id.
+    refined = refine_names(
         admission.entities,
         admission.triples,
+        gateway=gateway,
+        quotes=_quotes(admission.triples),
+    )
+    pruned = prune_inert(refined.entities, refined.triples, schema)
+
+    reconciled = reconcile(
+        pruned.entities,
+        pruned.triples,
         schema=schema,
         effective_dates=effective_dates,
         decisions=decisions,
@@ -146,9 +176,13 @@ def ingest(
         graph, problems = apply_profile(graph, profile)
         profile_problems = tuple(problems)
 
+    questions = tuple(reconciled.questions)
+    if pruned.removed:
+        questions = (*questions, _inert_question(pruned))
+
     return BuildResult(
         graph=graph,
-        questions=reconciled.questions,
+        questions=questions,
         rejections=tuple(rejections),
         manifest=manifest,
         coverage=Coverage(
@@ -160,7 +194,44 @@ def ingest(
         glossary=glossary,
         passages=passages,
         profile_problems=profile_problems,
+        scope_notes=tuple(scope_notes),
+        refinement=refined,
+        pruned=pruned,
     )
+
+
+def _inert_question(pruned: Pruned) -> Question:
+    """One question for all of them, because it is one decision.
+
+    Nine separate "this rule is attached to nothing" questions is not nine decisions — it
+    is one question about whether the extractor is missing a clause, asked nine times.
+    """
+    listed = "\n".join(f"- {i.name}" for i in pruned.removed)
+    return Question(
+        id=question_id("refine/inert", *(i.entity for i in pruned.removed)),
+        kind="refine/inert",
+        heading=f"{len(pruned.removed)} rules state nothing checkable and were left out",
+        detail=(
+            "Each was extracted as a rule but requires, forbids and bounds nothing, and "
+            "nothing is governed by it, so it could never have been checked against a "
+            "trace. Most are restatements of a rule already in the graph — a summary "
+            "section or an evaluation checklist. Any that are not are rules whose clause "
+            f"the extractor missed, and belong in the corpus:\n{listed}"
+        ),
+        blocks="",
+        evidence=(),
+    )
+
+
+def _quotes(triples: Sequence[Triple]) -> dict[str, tuple[str, ...]]:
+    """The source sentences each entity was found in, for naming it."""
+    found: dict[str, list[str]] = {}
+    for triple in triples:
+        for span in triple.spans:
+            for side in (triple.head, triple.tail if triple.tail_kind == "entity" else ""):
+                if side and span.quote not in found.setdefault(side, []):
+                    found[side].append(span.quote)
+    return {entity: tuple(quotes) for entity, quotes in found.items()}
 
 
 def _register(

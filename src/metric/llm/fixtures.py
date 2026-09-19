@@ -25,6 +25,10 @@ from typing import Any
 _LABEL = re.compile(r"^\[(P\d+)\] \(", re.MULTILINE)
 
 
+class FixtureMiss(LookupError):
+    """The fixture has no recorded answer for this call, and will not invent one."""
+
+
 class FixtureGateway:
     """Serves recorded entities and triples, keyed by the quote each triple cites."""
 
@@ -33,10 +37,12 @@ class FixtureGateway:
         *,
         entities: list[dict[str, str]] | None = None,
         triples: list[dict[str, str]] | None = None,
+        answers: dict[str, dict[str, Any]] | None = None,
         identity: str = "fixture",
     ) -> None:
         self.entities = entities or []
         self.triples = triples or []
+        self.answers = answers or {}
         self._identity = identity
         self.calls: list[str] = []
 
@@ -47,6 +53,7 @@ class FixtureGateway:
         return cls(
             entities=document.get("entities") or [],
             triples=document.get("triples") or [],
+            answers=document.get("answers") or {},
             identity=f"fixture:{path.name}",
         )
 
@@ -60,6 +67,20 @@ class FixtureGateway:
         self.calls.append(label)
         if label.startswith("glossary"):
             return {"entities": self.entities}
+
+        stage = re.split(r"[/\[]", label)[0]
+        if stage in self.answers:
+            return self.answers[stage]
+        if stage != "triples":
+            # A recorded extraction has nothing to say about a stage it never saw. Falling
+            # through to the triple search would return `{"triples": []}` — a well-formed
+            # answer to a question it was not asked — and the caller would read that as the
+            # model having found nothing rather than as the fixture having no answer.
+            raise FixtureMiss(
+                f"{label}: this fixture records an extraction and has no answer for the "
+                f"`{stage}` stage. Record one under `answers.{stage}`, or run this stage "
+                "against a model"
+            )
 
         answered = [
             {**triple, "passage": found}
