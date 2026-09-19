@@ -2,30 +2,10 @@ from __future__ import annotations
 
 from itertools import pairwise
 
+from tests.conftest import entity, triple
+
 from metric.graph.model import build as build_graph
-from metric.ontology.types import Entity, Span, Triple
 from metric.scenario.paths import enumerate_scenarios
-
-
-def span(passage: str = "pg1") -> Span:
-    return Span(passage_id=passage, start=0, end=5, quote="quote")
-
-
-def triple(head: str, relation: str, tail: str, *, kind: str = "entity") -> Triple:
-    return Triple(
-        head=head,
-        relation=relation,
-        tail=tail,
-        tail_kind=kind,  # type: ignore[arg-type]
-        spans=(span(),),
-        methods=frozenset({"deterministic"}),
-    )
-
-
-def entity(entity_id: str, entity_type: str) -> Entity:
-    return Entity(
-        id=entity_id, type=entity_type, canonical=entity_id, surfaces=frozenset({entity_id})
-    )
 
 
 def line(length: int) -> tuple:
@@ -68,12 +48,13 @@ class TestEnumeration:
         )
         visits = [
             sum(1 for step in s.steps if step.next_state == retry)
-            for s in built.space.scenarios
+            for s in built.space.of_category("journey_path")
         ]
         assert max(visits) == 3, "the policy caps attempts at three, so the walk stops there"
 
-    def test_a_category_comes_from_the_terminal_state_never_a_guess(self, built) -> None:
-        assert {s.category for s in built.space.scenarios} == {"Termination"}
+    def test_how_a_journey_ends_comes_from_the_terminal_state_never_a_guess(self, built) -> None:
+        journeys = built.space.of_category("journey_path")
+        assert {s.ends_as for s in journeys} == {"Termination"}
 
 
 class TestCoverageIsReported:

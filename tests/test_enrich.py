@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from metric.enrich.design import covering_array, plan
+from metric.enrich.design import Item, covering_array, plan
 from metric.enrich.factors import CatalogueError, Factor, load_catalogue
 
 REPO = Path(__file__).resolve().parents[1]
@@ -14,6 +14,16 @@ VOICE = REPO / "catalogs" / "voice.factors.yaml"
 
 def factor(name: str, *levels: str, invariant: bool = True, adverse: str = "") -> Factor:
     return Factor(name=name, group="g", levels=levels, invariant=invariant, adverse=adverse)
+
+
+def item(name: str, blocking: bool = False) -> Item:
+    return Item(
+        id=name,
+        category="journey_path",
+        family="traversal",
+        answer_type="path",
+        blocking=blocking,
+    )
 
 
 def pairs_in(rows) -> set:
@@ -36,7 +46,14 @@ def all_pairs(factors) -> set:
 class TestCatalogue:
     def test_the_voice_catalogue_loads(self) -> None:
         catalogue = load_catalogue(VOICE)
-        assert [f.name for f in catalogue.invariant] == ["clarity", "asr", "persona", "history"]
+        assert [f.name for f in catalogue.invariant] == [
+            "clarity",
+            "asr",
+            "persona",
+            "history",
+            "number_reading",
+            "paraphrase",
+        ]
         assert [f.name for f in catalogue.situational] == ["tool_fault"]
 
     def test_a_factor_with_one_level_varies_nothing(self, tmp_path: Path) -> None:
@@ -79,33 +96,40 @@ class TestCoveringArray:
 class TestPlan:
     def test_a_factor_that_changes_what_is_required_is_excluded_and_named(self) -> None:
         catalogue = load_catalogue(VOICE)
-        design = plan({"s1": False}, catalogue)
+        design = plan([item("s1")], catalogue)
         assert any("tool_fault" in note for note in design.excluded)
         assert all("tool_fault" not in dict(v.levels) for v in design.variants)
 
-    def test_coverage_is_reported(self) -> None:
-        design = plan({"s1": False}, load_catalogue(VOICE))
+    def test_coverage_is_reported_against_what_was_reachable(self) -> None:
+        """One base cannot cover pairs involving a factor that does not apply to it.
+
+        So the denominator is what the bases in hand could have exercised. Counting
+        against the whole catalogue would charge the design for a combination the corpus
+        has no use for, and no plan could ever be complete.
+        """
+        design = plan([item("s1")], load_catalogue(VOICE))
         assert design.complete
         assert design.pairs_total > 0
+        assert "number_reading" in design.dropped["s1"]
 
     def test_only_a_scenario_that_can_block_gets_the_adverse_run(self) -> None:
         catalogue = load_catalogue(VOICE)
-        design = plan({"weak": False, "strong": True}, catalogue)
+        design = plan([item("weak"), item("strong", blocking=True)], catalogue)
         reasons = {s: {v.reason for v in design.for_scenario(s)} for s in ("weak", "strong")}
         assert reasons["weak"] == {"pairwise"}
         assert "adverse" in reasons["strong"]
 
     def test_the_adverse_run_is_every_factor_at_its_hardest(self) -> None:
         catalogue = load_catalogue(VOICE)
-        design = plan({"strong": True}, catalogue)
+        design = plan([item("strong", blocking=True)], catalogue)
         adverse = next(v for v in design.for_scenario("strong") if v.reason == "adverse")
         assert dict(adverse.levels)["asr"] == "heavy_noise"
         assert dict(adverse.levels)["clarity"] == "garbled"
 
     def test_variant_ids_are_stable(self) -> None:
         catalogue = load_catalogue(VOICE)
-        first = plan({"s1": True}, catalogue)
-        second = plan({"s1": True}, catalogue)
+        first = plan([item("s1", blocking=True)], catalogue)
+        second = plan([item("s1", blocking=True)], catalogue)
         assert [v.id for v in first.variants] == [v.id for v in second.variants]
 
 

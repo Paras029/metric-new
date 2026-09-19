@@ -33,6 +33,7 @@ from metric.ontology.types import (
     TailKind,
     Triple,
 )
+from metric.settings import AdmissionSettings
 
 # Modal negation: what a prohibition is actually built from. Kept narrow on purpose --
 # a bare "not" appears in plenty of sentences that state a requirement, and rejecting
@@ -63,13 +64,18 @@ def admit(
     *,
     schema: Schema,
     passages: Mapping[str, Passage],
+    settings: AdmissionSettings | None = None,
 ) -> Admission:
     triples: list[Triple] = []
     rejections: list[Rejection] = []
     surfaces: dict[tuple[str, str], set[str]] = {}
 
+    rules = settings or AdmissionSettings()
+
     for candidate in candidates:
-        location, rejection = _check(candidate, schema=schema, passages=passages)
+        location, rejection = _check(
+            candidate, schema=schema, passages=passages, settings=rules
+        )
         if rejection is not None or location is None:
             rejections.append(
                 rejection
@@ -128,6 +134,7 @@ def _check(
     *,
     schema: Schema,
     passages: Mapping[str, Passage],
+    settings: AdmissionSettings,
 ) -> tuple[Location | None, Rejection | None]:
     """Run the criteria in order, returning the located span or the first failure."""
     problem = schema.check(candidate)
@@ -147,7 +154,9 @@ def _check(
             detail=f"unknown passage {candidate.passage_id!r}",
         )
 
-    location = locate(candidate.quote, passage.text)
+    location = locate(
+        candidate.quote, passage.text, min_quote_chars=settings.min_quote_chars
+    )
     if location is None:
         return None, Rejection(
             candidate=candidate,
@@ -156,13 +165,17 @@ def _check(
         )
 
     spec = schema.relations[candidate.relation]
-    mismatch = _polarity_problem(spec, location.text)
-    if mismatch is not None:
-        return None, Rejection(candidate=candidate, criterion="polarity", detail=mismatch)
+    if settings.check_polarity:
+        mismatch = _polarity_problem(spec, location.text)
+        if mismatch is not None:
+            return None, Rejection(candidate=candidate, criterion="polarity", detail=mismatch)
 
-    missing = _value_problem(spec, candidate.tail, location.text)
-    if missing is not None:
-        return None, Rejection(candidate=candidate, criterion="value", detail=missing)
+    if settings.check_value:
+        missing = _value_problem(
+            spec, candidate.tail, location.text, words=settings.numeric_word_tolerance
+        )
+        if missing is not None:
+            return None, Rejection(candidate=candidate, criterion="value", detail=missing)
 
     return location, None
 
@@ -181,7 +194,9 @@ def _polarity_problem(spec: RelationSpec, quote: str) -> str | None:
     return None
 
 
-def _value_problem(spec: RelationSpec, tail: str, quote: str) -> str | None:
+def _value_problem(
+    spec: RelationSpec, tail: str, quote: str, *, words: bool = True
+) -> str | None:
     """For a verbatim literal, require the value to be in the cited span.
 
     Enum and boolean tails are the pipeline's own vocabulary rather than the source's,
@@ -198,9 +213,10 @@ def _value_problem(spec: RelationSpec, tail: str, quote: str) -> str | None:
     if normalised(tail) in normalised(quote):
         return None
 
-    number = as_number(tail)
-    spelled = NUMBER_WORDS.get(number) if number is not None else None
-    if spelled and re.search(rf"\b{spelled}\b", quote, re.IGNORECASE):
-        return None
+    if words:
+        number = as_number(tail)
+        spelled = NUMBER_WORDS.get(number) if number is not None else None
+        if spelled and re.search(rf"\b{spelled}\b", quote, re.IGNORECASE):
+            return None
 
     return f"{spec.name} claims a value the cited quote does not contain"

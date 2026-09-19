@@ -1,16 +1,24 @@
 # How a voice customer can meet the same situation.
 #
 # A factor varies presentation; the policy situation and its contract stay fixed. That
-# separation is what makes a failure attributable: if a scenario passes at clarity=clear
+# separation is what makes a failure attributable: if a base passes at clarity=clear
 # and fails at clarity=garbled, the transcript is the cause, and nothing had to be
 # relabelled to find that out.
 #
-# `adverse` names the level that stresses the agent most. Scenarios whose contract can
-# block get one extra run with every factor at its adverse level.
+# Two fields govern how a factor enters a design.
 #
 # `invariant: false` means the factor changes what is *required*, not just how it is
-# presented. Those are separate situations and get their own base scenario; the planner
-# excludes them and says so rather than mixing them in.
+# presented. Those are separate situations and get their own base; the planner excludes
+# them and says so rather than mixing them in.
+#
+# `applies_to` names the bases a factor is meaningful for, by family, answer type or
+# category, and is applied automatically. Turn-level wording has nothing to do with how
+# many attempts a threshold allows, so crossing it in would spend the design's budget on
+# cells that cannot fail for the reason the column claims to measure. An absent
+# `applies_to` means the factor applies everywhere.
+#
+# `adverse` names the level that stresses the agent most. Bases whose contract can block
+# get one extra run with every relevant factor at its adverse level.
 version: 1
 name: voice
 
@@ -38,6 +46,29 @@ factors:
     levels: [none, prior_turns]
     adverse: prior_turns
     description: whether the journey starts cold or after unrelated conversation
+    # A base that turns on a single fact has no conversation to have a history of; only
+    # bases that walk the graph do.
+    applies_to:
+      families: [traversal, sequence]
+
+  - name: number_reading
+    group: entity
+    levels: [digits, grouped, spelled_out]
+    adverse: spelled_out
+    description: how a count or an amount is spoken back
+    # Meaningful only where a number is the thing under test.
+    applies_to:
+      answer_types: [int]
+
+  - name: paraphrase
+    group: variability
+    levels: [verbatim, light, heavy]
+    adverse: heavy
+    description: how far the customer's wording strays from the policy's own
+    # Not on canonical_text: what is under test there is whether the *agent* says the
+    # fixed wording, and paraphrasing the customer's side measures something else.
+    applies_to:
+      excludes: [canonical_text]
 
   # Changes what is required of the agent (detect, recover, escalate), so it is a
   # different situation rather than a different presentation of the same one.
@@ -46,3 +77,22 @@ factors:
     levels: [none, timeout, malformed_output]
     invariant: false
     description: a tool failing mid-journey
+
+# Named bundles. A profile selects factors, may rename their levels for a domain, and
+# may fix the arrangement — the three levels of customisation, in order, without anyone
+# forking this file.
+profiles:
+  smoke:
+    description: the smallest design that still varies the two dominant channel conditions
+    factors: [clarity, asr]
+    arrangement: crossed
+
+  ivr:
+    description: the full voice design, with levels named as the IVR team names them
+    arrangement: crossed
+    level_overrides:
+      asr: [clean, lossy, degraded]
+
+  regression:
+    description: every base seen a few times each, for a fixed nightly budget
+    arrangement: embedded

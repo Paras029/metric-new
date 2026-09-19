@@ -38,7 +38,12 @@ def merge(triples: Iterable[Triple]) -> list[Triple]:
 
 
 def apply_witness_bar(
-    triples: Sequence[Triple], *, approved: Mapping[str, str] | None = None
+    triples: Sequence[Triple],
+    *,
+    approved: Mapping[str, str] | None = None,
+    enabled: bool = True,
+    materiality: str = "high",
+    min_passages: int = 2,
 ) -> list[Triple]:
     """Move unsupported high-materiality triples to `review`, unless a person has ruled.
 
@@ -48,7 +53,10 @@ def apply_witness_bar(
     a single-source policy would produce a graph that can never block anything.
     """
     ruled = approved or {}
-    return [_bar(triple, ruled) for triple in triples]
+    return [
+        _bar(triple, ruled, enabled=enabled, materiality=materiality, min_passages=min_passages)
+        for triple in triples
+    ]
 
 
 def _merged(group: list[Triple]) -> Triple:
@@ -76,7 +84,14 @@ def _merged(group: list[Triple]) -> Triple:
     )
 
 
-def _bar(triple: Triple, ruled: Mapping[str, str]) -> Triple:
+def _bar(
+    triple: Triple,
+    ruled: Mapping[str, str],
+    *,
+    enabled: bool,
+    materiality: str,
+    min_passages: int,
+) -> Triple:
     if triple.status != "admitted":
         return triple
 
@@ -85,9 +100,9 @@ def _bar(triple: Triple, ruled: Mapping[str, str]) -> Triple:
         return _with_status(triple, "rejected")
     if answer == "approve":
         return triple
-    if triple.materiality != "high" or triple.methods != {"llm"}:
+    if not enabled or triple.materiality != materiality or triple.methods != {"llm"}:
         return triple
-    if len({span.passage_id for span in triple.spans}) > 1:
+    if len({span.passage_id for span in triple.spans}) >= min_passages:
         return triple
     return _with_status(triple, "review")
 

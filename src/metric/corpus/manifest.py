@@ -27,10 +27,13 @@ class BuildIdentity:
     prompts: str
     model: str
     code: str
+    settings: str = ""
 
     @property
     def digest(self) -> str:
-        payload = "\x1f".join([self.corpus, self.schema, self.prompts, self.model, self.code])
+        payload = "\x1f".join(
+            [self.corpus, self.schema, self.prompts, self.model, self.code, self.settings]
+        )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
     def as_dict(self) -> dict[str, Any]:
@@ -40,6 +43,7 @@ class BuildIdentity:
             "prompts": self.prompts,
             "model": self.model,
             "code": self.code,
+            "settings": self.settings,
             "digest": self.digest,
         }
 
@@ -51,6 +55,7 @@ class Manifest:
     prompt_hash: str = ""
     model: str = ""
     code_version: str = ""
+    settings_digest: str = ""
 
     def add(self, document: Document) -> None:
         self.documents.append(document)
@@ -69,6 +74,7 @@ class Manifest:
             prompts=self.prompt_hash,
             model=self.model,
             code=self.code_version,
+            settings=self.settings_digest,
         )
 
     def supersedes(self, earlier: Document, later: Document) -> bool:

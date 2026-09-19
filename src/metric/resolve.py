@@ -22,7 +22,7 @@ from metric.contract.compile import Compiled, build_contract
 from metric.contract.model import Contract
 from metric.graph.model import Graph
 from metric.ontology.schema import Schema
-from metric.scenario.paths import Scenario
+from metric.scenario.model import Scenario
 from metric.trace.binding import BoundTrace
 
 

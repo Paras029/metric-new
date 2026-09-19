@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections import Counter
 from collections.abc import Sequence
@@ -12,10 +13,11 @@ import yaml
 
 from metric import reports, review
 from metric.evaluate.model import Evaluation
-from metric.llm.cache import ResponseCache
-from metric.llm.gateway import AnthropicGateway, Gateway, ModelConfig, ReplayGateway
+from metric.llm.gateway import Gateway
+from metric.llm.select import build_gateway
 from metric.ontology.schema import SchemaError, load_schema
 from metric.pipeline import DocumentSpec, ingest
+from metric.settings import Settings, SettingsError, load_settings
 from metric.telemetry.profile import ProfileError, load_profile
 from metric.workspace import BuildSpec, Workspace
 
@@ -27,7 +29,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.run(args))
-    except (SchemaError, ProfileError, FileNotFoundError, ValueError) as exc:
+    except (SchemaError, ProfileError, SettingsError, FileNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
@@ -55,8 +57,10 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="serve every model call from the cache; a miss is an error",
     )
-    ingest_cmd.add_argument("--model", default=ModelConfig().model)
-    ingest_cmd.add_argument("--effort", default=ModelConfig().effort)
+    ingest_cmd.add_argument("--settings", type=Path, help="settings file (default metric.yaml)")
+    ingest_cmd.add_argument("--model", help="override llm.model for this run")
+    ingest_cmd.add_argument("--effort", help="override llm.effort for this run")
+    ingest_cmd.add_argument("--provider", help="override llm.provider for this run")
     ingest_cmd.add_argument("--profile", type=Path, help="telemetry profile for this use case")
     ingest_cmd.add_argument(
         "--fixture", type=Path, help="recorded extraction to build from instead of calling a model"
@@ -78,10 +82,31 @@ def _parser() -> argparse.ArgumentParser:
     )
     eval_cmd.set_defaults(run=_run_evaluate)
 
-    plan_cmd = sub.add_parser("plan", help="show the variants each scenario would be run under")
+    plan_cmd = sub.add_parser("plan", help="show the variants each base would be run under")
     plan_cmd.add_argument("--corpus", type=Path, default=Path("corpus.yaml"))
     plan_cmd.add_argument("--out", type=Path, default=Path("build"))
     plan_cmd.set_defaults(run=_run_plan)
+
+    bases_cmd = sub.add_parser(
+        "bases", help="what this graph can be asked, and what was generated from it"
+    )
+    bases_cmd.add_argument("--corpus", type=Path, default=Path("corpus.yaml"))
+    bases_cmd.add_argument("--out", type=Path, default=Path("build"))
+    bases_cmd.add_argument("--category", help="show the bases of one category in full")
+    bases_cmd.set_defaults(run=_run_bases)
+
+    attribute_cmd = sub.add_parser(
+        "attribute", help="which factor level made the agent fail, across a cohort of runs"
+    )
+    attribute_cmd.add_argument("results", type=Path, help="JSON list of run outcomes")
+    attribute_cmd.add_argument(
+        "--min-cell", type=int, default=5, help="runs needed either side of a comparison"
+    )
+    attribute_cmd.set_defaults(run=_run_attribute)
+
+    settings_cmd = sub.add_parser("settings", help="print the settings a build would use")
+    settings_cmd.add_argument("--settings", type=Path, help="settings file (default metric.yaml)")
+    settings_cmd.set_defaults(run=_run_settings)
 
     discover_cmd = sub.add_parser(
         "discover", help="draft a telemetry profile and an observed structure from traces"
@@ -147,17 +172,97 @@ def _run_plan(args: argparse.Namespace) -> int:
     if design is None:
         raise ValueError(f"{args.corpus} names no factor catalogue, so there is nothing to plan")
 
-    scenarios = len(space.space.scenarios)
-    each = len(design.variants) // max(1, scenarios)
-    print(f"{scenarios} scenarios x {each} = {len(design.variants)} runs")
+    bases = len(space.space.scenarios)
+    print(f"{bases} bases -> {len(design.variants)} runs, {design.arrangement}")
     print(
-        f"  pairwise coverage {design.pairs_covered}/{design.pairs_total}"
-        + ("" if design.complete else "  INCOMPLETE")
+        f"  pairwise coverage {design.pairs_covered}/{design.pairs_total} of the pairs "
+        "any base could exercise" + ("" if design.complete else "  INCOMPLETE")
     )
-    for note in design.excluded:
-        print(f"  excluded: {note}")
+    for note in (*design.notes, *design.excluded):
+        print(f"  {note}")
     adverse = [v for v in design.variants if v.reason == "adverse"]
-    print(f"  {len(adverse)} adverse runs (scenarios whose contract can block)")
+    print(f"  {len(adverse)} adverse runs (bases whose contract can block)")
+
+    if design.dropped:
+        by_factor: Counter[str] = Counter()
+        for factors in design.dropped.values():
+            by_factor.update(factors)
+        print("  not relevant, so not crossed in:")
+        for factor, count in sorted(by_factor.items()):
+            print(f"    {factor}: dropped from {count} of {bases} bases")
+    return 0
+
+
+def _run_bases(args: argparse.Namespace) -> int:
+    """What the graph can be asked, before and after generating from it."""
+    space = _workspace(args)
+    found = space.space
+    caps = space.capabilities["capabilities"]
+
+    print(f"capabilities: {', '.join(caps['present']) or 'none'}")
+    if caps["absent"]:
+        print(f"  absent: {', '.join(caps['absent'])}")
+    print(f"  closed world: {caps['closed_world']}")
+
+    print(f"\n{len(found.scenarios)} bases across {len(found.families)} families")
+    for category, count in found.coverage.items():
+        print(f"  {count:4}  {category}")
+    for reason in found.inadmissible:
+        print(f"     -  {reason}")
+
+    if found.rejected:
+        print(f"\n{len(found.rejected)} failed answer recovery and were quarantined:")
+        for base in found.rejected[:10]:
+            print(f"  {base.category}: {base.check_note}")
+
+    if args.category:
+        print(f"\n{args.category}:")
+        for base in found.of_category(args.category):
+            print(f"  {base.question}")
+    return 0
+
+
+def _run_attribute(args: argparse.Namespace) -> int:
+    """Which level made the agent fail, across a cohort someone actually ran."""
+    from metric.attribution import Outcome, attribute
+
+    with args.results.open(encoding="utf-8") as handle:
+        records = json.load(handle)
+    if not isinstance(records, list):
+        raise ValueError(f"{args.results} must hold a JSON list of run outcomes")
+
+    outcomes = [
+        Outcome(
+            variant=str(r.get("variant", "")),
+            scenario=str(r.get("scenario", "")),
+            levels=tuple((str(k), str(v)) for k, v in sorted((r.get("levels") or {}).items())),
+            passed=bool(r["passed"]),
+        )
+        for r in records
+    ]
+
+    found = attribute(outcomes, min_cell=args.min_cell)
+    print(
+        f"{found.overall.passed}/{found.overall.total} passed "
+        f"({found.overall.value:.0%}, 95% {found.overall.interval})"
+    )
+    if not found.significant:
+        print("  no factor level survives correction for multiplicity")
+    for effect in found.significant:
+        print(
+            f"  {effect.factor}={effect.level} {effect.direction}: "
+            f"{effect.rate.value:.0%} vs {effect.baseline.value:.0%}, "
+            f"odds ratio {effect.odds_ratio:.2f} {effect.odds_interval}, q={effect.q_value:.3f}"
+        )
+    for note in found.notes:
+        print(f"  note: {note}")
+    return 0
+
+
+def _run_settings(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    print(f"settings digest {settings.digest}")
+    print(yaml.safe_dump(settings.as_dict(), sort_keys=True, default_flow_style=False).rstrip())
     return 0
 
 
@@ -269,12 +374,28 @@ def _specs(args: argparse.Namespace) -> list[DocumentSpec]:
     return specs
 
 
+def _settings(args: argparse.Namespace) -> Settings:
+    """Settings from the named file, then whatever the flags overrode."""
+    from dataclasses import replace
+
+    path = getattr(args, "settings", None) or (
+        Path("metric.yaml") if Path("metric.yaml").exists() else None
+    )
+    settings = load_settings(path)
+    overrides = {
+        key: getattr(args, key)
+        for key in ("model", "effort", "provider")
+        if getattr(args, key, None)
+    }
+    if not overrides:
+        return settings
+    return replace(settings, llm=replace(settings.llm, **overrides))
+
+
 def _gateway(args: argparse.Namespace) -> Gateway:
-    config = ModelConfig(model=args.model, effort=args.effort)
-    cache = ResponseCache(root=args.cache)
-    if args.replay:
-        return ReplayGateway(cache, config=config)
-    return AnthropicGateway(config=config, cache=cache)
+    return build_gateway(
+        _settings(args).llm, cache_path=args.cache, fixture_path=None, replay=args.replay
+    )
 
 
 if __name__ == "__main__":

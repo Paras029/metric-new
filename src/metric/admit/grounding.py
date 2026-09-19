@@ -42,9 +42,11 @@ class Location:
     exact: bool
 
 
-def locate(quote: str, passage_text: str) -> Location | None:
+def locate(
+    quote: str, passage_text: str, *, min_quote_chars: int = MIN_QUOTE_CHARS
+) -> Location | None:
     """Find `quote` in `passage_text`, returning the source substring that matched."""
-    if len(quote.strip()) < MIN_QUOTE_CHARS:
+    if len(quote.strip()) < min_quote_chars:
         return None
 
     start = passage_text.find(quote)

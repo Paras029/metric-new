@@ -23,6 +23,7 @@ from metric.ontology.schema import Schema
 from metric.ontology.types import Entity, Question, Triple
 from metric.reconcile import conflicts, integrity
 from metric.reconcile.dedup import REVIEW_QUESTION, apply_witness_bar, merge, review_question_id
+from metric.settings import WitnessSettings
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,8 +40,16 @@ def reconcile(
     schema: Schema,
     effective_dates: Mapping[str, str],
     decisions: Mapping[str, str] | None = None,
+    witness: WitnessSettings | None = None,
 ) -> Reconciled:
-    merged = apply_witness_bar(merge(triples), approved=decisions)
+    bar = witness or WitnessSettings()
+    merged = apply_witness_bar(
+        merge(triples),
+        approved=decisions,
+        enabled=bar.enabled,
+        materiality=bar.materiality,
+        min_passages=bar.min_passages,
+    )
 
     # Labels come from a provisional graph: conflict messages name entities the way the
     # corpus does, which is the only form a reviewer can act on.

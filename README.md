@@ -24,11 +24,17 @@ asks a person about the rest.
 pip install -e ".[dev]"
 
 metric ui                 # browse the build, review it, grade traces — http://127.0.0.1:8765
-metric evaluate           # the same thing on the command line
-metric plan               # the variants each scenario would be run under
+metric bases              # what this graph can be asked, and what was generated from it
+metric evaluate           # grade the traces on the command line
+metric plan               # the variants each base would be run under
+metric attribute RUNS     # which factor level made the agent fail, across a cohort
 metric discover TRACE...  # draft a profile and an observed structure from telemetry
+metric settings           # every tunable a build would use, and its digest
 metric schema --schema schemas/core.ontology.yaml --extend schemas/card_auth.ontology.yaml
 ```
+
+**[SETUP.md](SETUP.md)** has the whole install, including running it through SafeChain
+inside the bank and standing up a new use case.
 
 Two corpora ship with the repo. `corpus.yaml` is the card-authentication policy: a document, an
 ontology, a telemetry profile, traces and a factor catalogue. `corpus-aop.yaml` is the opposite and
@@ -39,15 +45,23 @@ equally real case — production traces for an agent with no operating procedure
 to a live agent, and which traces to grade. It points at a recorded extraction, so the whole thing
 runs offline with no API key; remove `fixture:` to call the model.
 
-The build writes five files to `--out`:
+The build writes to `--out`:
 
 | File | What it holds |
 |---|---|
 | `graph.json` | admitted triples, canonically sorted, each with its spans and how it was found |
 | `quarantine.json` | every rejected candidate, the criterion it failed, the quote it claimed |
+| `scenarios.json` | the bases, the graph's capabilities, the taxonomy, and the settings used |
+| `plan.json` | the variants each base would be run under |
+| `evaluations.json` | verdicts per trace, and ground truth per turn |
 | `questions.yaml` | what the pipeline could not settle — edit it in place and re-run |
-| `manifest.json` | build identity: corpus, schema, prompts, model, code |
+| `manifest.json` | build identity: corpus, schema, prompts, model, settings, code |
 | `report.md` | what went wrong first, then the counts |
+
+`metric.yaml` holds every tunable in the pipeline, shipped with the defaults written out,
+and the whole file is hashed into build identity — two builds that used different settings
+are different builds and say so. `provider: safechain` is the only edit needed to run this
+inside American Express.
 
 `--replay` serves every model call from the cache and errors on a miss, so a rebuild cannot quietly
 become a new build. Model calls need `ANTHROPIC_API_KEY` or `ant auth login`.
@@ -61,7 +75,7 @@ become a new build. Model calls need `ANTHROPIC_API_KEY` or `ant auth login`.
                                                                                   │
                              ┌────────────────────────────────────────────────────┤
                              ▼                                                    ▼
-                    scenarios (paths)                                    a trace (OTEL)
+                  bases, by capability                                   a trace (OTEL)
                       scenario/                                            trace/ + profile
                              │                                                    │
                              │                                            place each turn
@@ -94,7 +108,7 @@ synthetic benchmark drifting away from production evaluation.
 | `llm/` | the single model call, the response cache, prompts built from the active ontology |
 | `admit/` | quote location and the ordered admission criteria |
 | `reconcile/` | merge, the witness bar, typed conflicts, conditional integrity |
-| `scenario/` | bounded path enumeration, plus a focused path back to every branch it missed |
+| `scenario/` | what the graph can be asked, the base taxonomy, the generators, the answer check |
 | `contract/` | assertions with severity, derivation level and provenance |
 | `trace/` | reading an OTEL export, binding it to the ontology, and placing each turn in the graph |
 | `groundtruth.py` | what policy required at a turn, against what the turn did |
@@ -102,7 +116,9 @@ synthetic benchmark drifting away from production evaluation.
 | `runtime/` | state, counters and order, replayed from a bound trace |
 | `evaluate/` | one grader per assertion kind, and verdicts by dimension |
 | `discover/` | traces in, a draft profile and observed structure out |
-| `enrich/` | the factor catalogue and a pairwise design over it |
+| `enrich/` | the factor catalogue, relevance and profiles, the design over it, the render seam |
+| `attribution.py` | which factor level made the agent fail, and which component |
+| `settings.py` | every tunable, hashed into build identity |
 | `ui/` | the pages, stdlib server, SVG workflow layout |
 
 The load-bearing ideas, each with the failure it prevents:
@@ -143,6 +159,23 @@ The load-bearing ideas, each with the failure it prevents:
 - **Enrichment cannot reach the contract.** A variant changes how the agent meets a situation, never
   what is required of it, so a failure under one level and a pass under another is attributable to
   the level. A factor that *does* change what is required is excluded from the design and named.
+- **A category is admissible only if the graph exposes the capability it needs.** Test material is
+  derived from the graph outward, not from a list of prompts. A policy that states no prohibitions
+  generates no prohibition material and says why — rather than reporting a category at zero, which
+  is indistinguishable from a bug.
+- **A generated base is not admitted until its answer is recovered a second way.** The generators
+  read indexes; the check scans the flat triple list. Its first run found a real disagreement — in
+  the checker, which was reading a different population. A generator walking a wrongly-filled index
+  produces confident, well-formed, incorrect tests, and nothing downstream can tell.
+- **A factor is crossed only where it means something.** Numeric framing says nothing about a route
+  through the graph. Crossing it in spends the budget on cells that cannot fail for the reason the
+  column claims to measure, and dilutes every attribution drawn from it.
+- **Selecting a factor is data; rendering its levels is code.** The design records `clarity=garbled`;
+  making a prompt read garbled is an installation's own work. The default renderer varies nothing
+  and says so, because nothing should be attributed to a column that never reached the agent.
+- **No rate without an interval, no comparison without correction.** Four of five passing is not 80%
+  — the interval runs from 38% to 96%. Dozens of tests at a nominal 5% produce a finding by chance,
+  so the whole family is corrected before anything is called an effect.
 
 ## Documents
 
@@ -153,6 +186,8 @@ The load-bearing ideas, each with the failure it prevents:
 | `design/08-scenarios-contracts-evaluation.md` | scenarios, contracts, trace binding, evaluation and the UI. **Read this second.** |
 | `design/09-discovery-enrichment-and-a-sweep.md` | discovery from traces, the enrichment layer, and what a performance and correctness sweep found |
 | `design/10-reverse-mapping.md` | placing a turn in the graph, the inverse index, and ground truth per turn. **The reverse direction.** |
+| `design/11-bases-enrichment-and-deployment.md` | the base taxonomy, the answer check, the enrichment design space, settings, and SafeChain |
+| `SETUP.md` | installing it, running it through SafeChain, and standing up a new use case |
 | `design/01`–`05` | the route there: ontology, failure modes, repo shape, loopholes, GEODE assessment |
 | `grounding/README.md` | index and reading order for the grounding material |
 | `grounding/06-key-findings-scenario-generator-vs-target.md` | gap analysis against the old Scenario Generator, with `file:line` evidence |
@@ -162,8 +197,11 @@ The load-bearing ideas, each with the failure it prevents:
 ## Status
 
 Policy to verdict runs end to end in both directions, over two corpora: a policy with traces, and
-traces with no policy. 187 tests; ruff and `mypy --strict` clean.
+traces with no policy. 258 tests; ruff and `mypy --strict` clean. On the card-authentication policy,
+6 journey paths became **32 bases across 5 families**, every one of them checked by recovering its
+answer from the triples a second time.
 
-Not yet built: the independent annotation and accuracy gate, a simulator to turn a planned variant
-into an actual run, a semantic oracle for paraphrase-permitted language, fault injection, and the
-GEODE evaluation. `design/09` §4 lists the current limits and §5 the order to take them in.
+Not yet built: a simulator to turn a planned variant into an actual run — which is now the only
+thing between `metric plan` and `metric attribute` — the independent annotation and accuracy gate,
+φp space-filling designs, a semantic oracle for paraphrase-permitted language, and the GEODE
+evaluation. `design/11` §7 lists the current limits and §8 the order to take them in.

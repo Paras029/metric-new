@@ -1,4 +1,4 @@
-"""Enumerating the journeys the graph says are possible.
+"""The `journey_path` generator: enumerating the routes the graph says are possible.
 
 This is the one part of the old Scenario Generator worth keeping almost as it was: a
 bounded walk over states and decision outcomes, plus a second pass that goes back for
@@ -13,91 +13,21 @@ claim about the agent rather than a property of our search.
 **Truncation is an output.** Hitting the path budget is reported as a coverage gap
 with the budget that caused it. A generator that silently stops at a thousand paths is
 telling you it covered the graph when it covered a prefix of it.
+
+One category of eleven. `space.py` composes it with the rest.
 """
 
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
-from typing import Any
 
 from metric.graph.journey import Journey
 from metric.graph.model import Graph
 from metric.ontology.ids import assertion_id
+from metric.scenario.model import Scenario, ScenarioSpace, Step
 
 DEFAULT_MAX_DEPTH = 12
 DEFAULT_MAX_PATHS = 500
-
-
-@dataclass(frozen=True, slots=True)
-class Step:
-    state: str
-    decision: str
-    outcome: str
-    next_state: str
-
-    @property
-    def entities(self) -> tuple[str, ...]:
-        return tuple(x for x in (self.state, self.decision, self.outcome, self.next_state) if x)
-
-
-@dataclass(frozen=True, slots=True)
-class Scenario:
-    id: str
-    entry: str
-    steps: tuple[Step, ...]
-    terminal: str
-    category: str
-    complete: bool
-    origin: str
-
-    @property
-    def entities(self) -> tuple[str, ...]:
-        seen = [self.entry]
-        for step in self.steps:
-            seen.extend(e for e in step.entities if e not in seen)
-        return tuple(seen)
-
-    @property
-    def length(self) -> int:
-        return len(self.steps)
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "id": self.id,
-            "entry": self.entry,
-            "terminal": self.terminal,
-            "category": self.category,
-            "complete": self.complete,
-            "origin": self.origin,
-            "steps": [
-                {
-                    "state": s.state,
-                    "decision": s.decision,
-                    "outcome": s.outcome,
-                    "next_state": s.next_state,
-                }
-                for s in self.steps
-            ],
-        }
-
-
-@dataclass(frozen=True, slots=True)
-class ScenarioSpace:
-    scenarios: tuple[Scenario, ...]
-    truncated: bool
-    uncovered: tuple[tuple[str, str, str], ...]
-    unreachable: tuple[str, ...]
-    notes: tuple[str, ...]
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "scenarios": [s.as_dict() for s in self.scenarios],
-            "truncated": self.truncated,
-            "uncovered": [list(edge) for edge in self.uncovered],
-            "unreachable": list(self.unreachable),
-            "notes": list(self.notes),
-        }
 
 
 def enumerate_scenarios(
@@ -105,13 +35,15 @@ def enumerate_scenarios(
     *,
     max_depth: int = DEFAULT_MAX_DEPTH,
     max_paths: int = DEFAULT_MAX_PATHS,
+    journey: Journey | None = None,
+    reach_for_uncovered: bool = True,
 ) -> ScenarioSpace:
-    journey = Journey(graph)
-    entries = journey.entries()
+    walk = journey or Journey(graph)
+    entries = walk.entries()
     notes: list[str] = []
 
     if not entries:
-        return ScenarioSpace((), False, (), (), ("the graph declares no states to start from",))
+        return ScenarioSpace((), notes=("the graph declares no states to start from",))
     if not graph.by_relation("STARTS_AT"):
         notes.append(
             "no STARTS_AT in the graph; entry states were taken to be those nothing leads to"
@@ -123,7 +55,7 @@ def enumerate_scenarios(
 
     for entry in entries:
         found, hit_budget = _walk(
-            journey, entry, max_depth=max_depth, budget=max_paths - len(scenarios)
+            walk, entry, max_depth=max_depth, budget=max_paths - len(scenarios)
         )
         truncated = truncated or hit_budget
         scenarios.extend(found)
@@ -135,12 +67,12 @@ def enumerate_scenarios(
 
     all_edges = {
         (state, decision, outcome)
-        for state, edges in journey.edges.items()
+        for state, edges in walk.edges.items()
         for decision, outcome, _ in edges
     }
     uncovered = sorted(all_edges - covered)
-    if uncovered:
-        scenarios.extend(_reach_for(journey, entries, uncovered, max_depth=max_depth))
+    if uncovered and reach_for_uncovered:
+        scenarios.extend(_reach_for(walk, entries, uncovered, max_depth=max_depth))
         covered.update((s.state, s.decision, s.outcome) for sc in scenarios for s in sc.steps)
         uncovered = sorted(all_edges - covered)
 
@@ -154,7 +86,7 @@ def enumerate_scenarios(
         scenarios=tuple(scenarios),
         truncated=truncated,
         uncovered=tuple(uncovered),
-        unreachable=_unreachable(graph, journey, scenarios),
+        unreachable=_unreachable(graph, scenarios),
         notes=tuple(notes),
     )
 
@@ -245,20 +177,25 @@ def _shortest_path(
 def _scenario(
     journey: Journey, entry: str, steps: tuple[Step, ...], terminal: str, *, origin: str
 ) -> Scenario:
+    label = journey.graph.label
+    route = " → ".join([label(entry), *(label(s.next_state) for s in steps)])
     return Scenario(
         id=assertion_id("scenario", entry, *(f"{s.decision}:{s.outcome}" for s in steps), terminal),
+        category="journey_path",
+        family="traversal",
+        answer_type="path",
+        question=f"Walk {route}",
+        answer=tuple([entry, *(s.next_state for s in steps)]),
         entry=entry,
         steps=steps,
         terminal=terminal,
-        category=journey.category(terminal),
+        ends_as=journey.ends_as(terminal),
         complete=terminal in journey.terminals,
         origin=origin,
     )
 
 
-
-
-def _unreachable(graph: Graph, journey: Journey, scenarios: list[Scenario]) -> tuple[str, ...]:
+def _unreachable(graph: Graph, scenarios: list[Scenario]) -> tuple[str, ...]:
     visited = {entity for scenario in scenarios for entity in scenario.entities}
     states = set(graph.ids_of_type("State"))
     return tuple(sorted(states - visited))

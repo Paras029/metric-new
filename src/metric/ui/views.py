@@ -22,7 +22,7 @@ from metric.graph.model import Graph
 from metric.groundtruth import TurnTruth
 from metric.ontology.types import Entity, Question, Rejection, Span, Triple
 from metric.review import outstanding
-from metric.scenario.paths import Scenario
+from metric.scenario.model import Scenario
 from metric.ui import html, layout
 from metric.ui.html import chip, panel, quote, stats, table, tone
 from metric.workspace import Workspace
@@ -215,9 +215,12 @@ def entity_view(space: Workspace, entity_id: str) -> str:
 
 
 def _path(graph: Graph, scenario: Scenario) -> str:
-    labels = [graph.label(scenario.entry)]
-    labels += [graph.label(step.next_state) for step in scenario.steps]
-    return " → ".join(labels)
+    """How a base reads at a glance: its route, or what it is about."""
+    if scenario.steps or scenario.entry:
+        labels = [graph.label(scenario.entry)]
+        labels += [graph.label(step.next_state) for step in scenario.steps]
+        return " → ".join(label for label in labels if label)
+    return ", ".join(graph.label(s) for s in scenario.subject)
 
 
 def scenarios(space: Workspace) -> str:
@@ -227,11 +230,11 @@ def scenarios(space: Workspace) -> str:
     rows = [
         [
             f"<a href='/scenario/{urlquote(s.id)}'><code>{escape(s.id[:8])}</code></a>",
-            chip(s.origin),
-            escape(s.category or "—"),
-            str(s.length),
+            chip(s.category),
+            chip(s.family),
+            escape(s.question),
             escape(_path(graph, s)),
-            chip("ends properly", "pass") if s.complete else chip("no declared ending", "warn"),
+            chip("recovered", "pass") if s.checked else chip("unverified", "warn"),
         ]
         for s in found.scenarios
     ]
@@ -253,15 +256,48 @@ def scenarios(space: Workspace) -> str:
 
     return "".join(
         [
-            "<h1>Scenarios</h1>",
-            "<p class='lede'>Every journey the graph says is possible, plus a focused path "
-            "back to any branch the walk missed. Open one to see the contract it would be "
-            "tested against.</p>",
+            "<h1>Bases</h1>",
+            "<p class='lede'>Every situation this graph can be asked about, one generator "
+            "per category the graph has the capability to support. Each one's answer was "
+            "recovered from the triples a second time before it was admitted. Open one to "
+            "see the contract it would be tested against.</p>",
+            _capability_panel(space),
             panel("Coverage", "".join(gaps)),
             _variants_panel(space),
-            table(["id", "origin", "category", "steps", "path", "ending"], rows),
+            table(["id", "category", "family", "situation", "where", "answer"], rows),
         ]
     )
+
+
+def _capability_panel(space: Workspace) -> str:
+    """What the graph can be asked, before anything was generated from it."""
+    found = space.space
+    caps = space.capabilities["capabilities"]
+
+    body = [
+        "<p class='lede'>A category is admissible only if the graph exposes the capability "
+        "it needs. A policy that states no prohibitions generates no prohibition material "
+        "and says so, rather than reporting a category at zero.</p>",
+        table(
+            ["category", "bases"],
+            [[escape(name), str(count)] for name, count in found.coverage.items()],
+        ),
+        f"<p>Present: {escape(', '.join(caps['present'])) or '—'}</p>",
+    ]
+    if caps["absent"]:
+        body.append(f"<p class='lede'>Absent: {escape(', '.join(caps['absent']))}</p>")
+    for reason in found.inadmissible:
+        body.append(f"<p class='lede'>{escape(reason)}</p>")
+    if found.rejected:
+        body.append(
+            f"<p><strong>{len(found.rejected)} bases failed answer recovery</strong> and were "
+            "quarantined:</p>"
+            + table(
+                ["category", "disagreement"],
+                [[escape(b.category), escape(b.check_note)] for b in found.rejected[:20]],
+            )
+        )
+    return panel("What this graph can be asked", "".join(body))
 
 
 def _variants_panel(space: Workspace) -> str:
@@ -277,8 +313,9 @@ def _variants_panel(space: Workspace) -> str:
     catalogue = space.catalogue
     factors = catalogue.invariant if catalogue else ()
     body = [
-        f"<p>{len(design.variants)} runs from {len(space.space.scenarios)} scenarios. "
-        f"Pairwise coverage {design.pairs_covered} of {design.pairs_total} level pairs"
+        f"<p>{len(design.variants)} runs from {len(space.space.scenarios)} bases, "
+        f"{escape(design.arrangement)}. Pairwise coverage {design.pairs_covered} of "
+        f"{design.pairs_total} pairs any base could exercise"
         + ("." if design.complete else " — <strong>incomplete</strong>.")
         + "</p>",
         table(
@@ -294,8 +331,18 @@ def _variants_panel(space: Workspace) -> str:
             ],
         ),
     ]
-    for note in design.excluded:
+    for note in (*design.notes, *design.excluded):
         body.append(f"<p class='lede'>{escape(note)}</p>")
+    if design.dropped:
+        counts: dict[str, int] = {}
+        for dropped in design.dropped.values():
+            for name in dropped:
+                counts[name] = counts.get(name, 0) + 1
+        body.append(
+            "<p class='lede'>Not relevant, so not crossed in: "
+            + escape(", ".join(f"{n} ({c} bases)" for n, c in sorted(counts.items())))
+            + "</p>"
+        )
     if not any(v.reason == "adverse" for v in design.variants):
         body.append(
             "<p class='lede'>No scenario gets the extra adverse run yet: that is reserved for "
@@ -323,16 +370,30 @@ def scenario_view(space: Workspace, scenario_id: str) -> str:
         for index, step in enumerate(scenario.steps, start=1)
     ]
 
-    return "".join(
-        [
-            f"<h1>Scenario <code>{escape(scenario_id[:8])}</code></h1>",
-            f"<p class='lede'>{chip(scenario.origin)} {chip(scenario.category or 'uncategorised')} "
-            f"{len(contract.assertions)} assertions resolved from this path.</p>",
-            panel("Path", table(["#", "state", "decision", "outcome", "next"], steps)),
-            panel("Contract", _assertions(space, contract.assertions)),
-            _scenario_variants(space, scenario_id),
-        ]
+    recovery = (
+        chip("answer recovered from the triples", "pass")
+        if scenario.checked
+        else chip(scenario.check_note or "not recovered", "warn")
     )
+    body = [
+        f"<h1>Base <code>{escape(scenario_id[:8])}</code></h1>",
+        f"<p class='lede'>{chip(scenario.category)} {chip(scenario.family)} "
+        f"{chip(scenario.origin)} {recovery} "
+        f"{len(contract.assertions)} assertions resolved from it.</p>",
+        panel(
+            "Situation",
+            f"<p>{escape(scenario.question)}</p>"
+            f"<p class='lede'>Ground truth: "
+            f"{escape(', '.join(graph.label(a) for a in scenario.answer)) or '—'}</p>",
+        ),
+    ]
+    if steps:
+        body.append(panel("Path", table(["#", "state", "decision", "outcome", "next"], steps)))
+    body += [
+        panel("Contract", _assertions(space, contract.assertions)),
+        _scenario_variants(space, scenario_id),
+    ]
+    return "".join(body)
 
 
 def _scenario_variants(space: Workspace, scenario_id: str) -> str:

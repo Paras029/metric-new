@@ -2,11 +2,23 @@
 #
 # One file so the CLI and the UI build the same thing. Point `fixture` at a recorded
 # extraction to build offline; remove it to call the model.
+use_case: card_authentication
 schema: schemas/core.ontology.yaml
 extend: schemas/card_auth.ontology.yaml
 profile: profiles/card_auth.telemetry.yaml
 fixture: fixtures/card_auth.extraction.json
 factors: catalogs/voice.factors.yaml
+
+# Every tunable, with the defaults written out. Picked up automatically when it sits
+# beside this file; name another path here to point somewhere else.
+settings: metric.yaml
+
+# A named bundle from the factor catalogue, or leave it out for the whole catalogue.
+# factor_profile: smoke
+
+# Bases supplied by hand rather than mined from the graph — real cases to harden
+# against, whose answer is the ground truth whether or not the graph agrees yet.
+# seeds: catalogs/card_auth.seeds.yaml
 
 documents:
   - path: grounding/07-card-authentication-policy.md

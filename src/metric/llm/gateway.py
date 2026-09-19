@@ -85,7 +85,7 @@ class AnthropicGateway:
     def json(
         self, *, system: str, prompt: str, schema: dict[str, Any], label: str
     ) -> dict[str, Any]:
-        payload = _payload(self._config, system=system, prompt=prompt, schema=schema)
+        payload = build_payload(self._config, system=system, prompt=prompt, schema=schema)
         key = request_key(payload)
 
         if self._cache is not None:
@@ -154,14 +154,14 @@ class ReplayGateway:
     def json(
         self, *, system: str, prompt: str, schema: dict[str, Any], label: str
     ) -> dict[str, Any]:
-        key = request_key(_payload(self._config, system=system, prompt=prompt, schema=schema))
+        key = request_key(build_payload(self._config, system=system, prompt=prompt, schema=schema))
         cached = self._cache.get(key)
         if cached is None:
             raise CacheMiss(f"{label}: no recorded response for request {key[:12]}")
         return cached
 
 
-def _payload(
+def build_payload(
     config: ModelConfig, *, system: str, prompt: str, schema: dict[str, Any]
 ) -> dict[str, Any]:
     return {

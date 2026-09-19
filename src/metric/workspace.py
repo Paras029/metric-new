@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -22,18 +22,20 @@ import yaml
 from metric.contract.compile import compile_all
 from metric.contract.model import Contract
 from metric.discover.emit import load_observations
-from metric.enrich.design import Plan, plan
+from metric.enrich.design import Item, Plan, plan
 from metric.enrich.factors import Catalogue, load_catalogue
+from metric.enrich.factors import Profile as FactorProfile
 from metric.evaluate.model import Evaluation
 from metric.evaluate.run import evaluate_trace
-from metric.llm.cache import ResponseCache
-from metric.llm.fixtures import FixtureGateway
-from metric.llm.gateway import AnthropicGateway, Gateway, ModelConfig, ReplayGateway
+from metric.llm.gateway import Gateway
+from metric.llm.select import build_gateway
 from metric.ontology.schema import Schema, load_schema
 from metric.pipeline import BuildResult, DocumentSpec, ingest
 from metric.resolve import resolve_for_scenario
 from metric.review import ANSWERS, Decision, evidence_key, read, write
-from metric.scenario.paths import ScenarioSpace, enumerate_scenarios
+from metric.scenario.model import ScenarioSpace
+from metric.scenario.space import build_space, describe, load_seeds
+from metric.settings import Settings, load_settings
 from metric.telemetry.profile import Profile, load_profile
 from metric.trace.galileo import read_galileo_export
 from metric.trace.model import Trace
@@ -51,12 +53,16 @@ class BuildSpec:
     profile_path: Path | None = None
     observations_path: Path | None = None
     catalogue_path: Path | None = None
+    seeds_path: Path | None = None
+    settings_path: Path | None = None
     fixture_path: Path | None = None
     cache_path: Path | None = None
     traces: tuple[Path, ...] = ()
     out_dir: Path = Path("build")
-    model: ModelConfig = field(default_factory=ModelConfig)
     replay: bool = False
+    use_case: str = ""
+    factor_profile: str = ""
+    settings_overrides: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_corpus(cls, path: Path, **overrides: object) -> BuildSpec:
@@ -80,15 +86,23 @@ class BuildSpec:
             ("profile", "profile_path"),
             ("observed", "observations_path"),
             ("factors", "catalogue_path"),
+            ("seeds", "seeds_path"),
+            ("settings", "settings_path"),
             ("fixture", "fixture_path"),
         ):
             if document.get(key):
                 settings[field_name] = root / str(document[key])
         if document.get("traces"):
             settings["traces"] = tuple(root / str(t) for t in document["traces"])
+        for key, field_name in (("use_case", "use_case"), ("factor_profile", "factor_profile")):
+            if document.get(key):
+                settings[field_name] = str(document[key])
 
         settings.update(overrides)
-        return cls(**settings)  # type: ignore[arg-type]
+        spec = cls(**settings)  # type: ignore[arg-type]
+        if spec.settings_path is None and (root / "metric.yaml").exists():
+            spec = replace(spec, settings_path=root / "metric.yaml")
+        return spec
 
 
 def _write_json(path: Path, document: dict[str, Any]) -> None:
@@ -114,8 +128,26 @@ class Workspace:
         self.catalogue: Catalogue | None = (
             load_catalogue(spec.catalogue_path) if spec.catalogue_path else None
         )
+        self.settings: Settings = replace(
+            load_settings(spec.settings_path), **(spec.settings_overrides or {})
+        )
+        self.seeds = load_seeds(spec.seeds_path) if spec.seeds_path else ()
         self.traces: tuple[Trace, ...] = tuple(read_galileo_export(p) for p in spec.traces)
         self.build()
+
+    @property
+    def factor_profile(self) -> FactorProfile | None:
+        """The named bundle of factors and levels this corpus asked for."""
+        if self.catalogue is None or not self.spec.factor_profile:
+            return None
+        found = self.catalogue.profiles.get(self.spec.factor_profile)
+        if found is None:
+            raise ValueError(
+                f"{self.spec.catalogue_path} declares no profile "
+                f"{self.spec.factor_profile!r}; it has "
+                f"{', '.join(sorted(self.catalogue.profiles)) or 'none'}"
+            )
+        return found
 
     @property
     def questions_path(self) -> Path:
@@ -136,10 +168,20 @@ class Workspace:
             decisions=answers,
             profile=self.profile,
             observations=self.observations,
+            settings=self.settings,
         )
         self.graph = self.result.graph
         self.compiled = compile_all(self.graph, self.schema)
-        self.space: ScenarioSpace = enumerate_scenarios(self.graph)
+        scenario_settings = self.settings.scenario
+        self.capabilities = describe(self.graph)
+        self.space: ScenarioSpace = build_space(
+            self.graph,
+            max_depth=scenario_settings.max_depth,
+            max_paths=scenario_settings.max_paths,
+            default_revisits=scenario_settings.default_revisits,
+            reach_for_uncovered=scenario_settings.reach_for_uncovered,
+            seeds=self.seeds,
+        )
         self.plan: Plan | None = self._plan()
         self.evaluations: tuple[Evaluation, ...] = tuple(
             evaluate_trace(
@@ -155,18 +197,33 @@ class Workspace:
         return self.result
 
     def _plan(self) -> Plan | None:
-        """Which variants of each scenario to run.
+        """Which variants of each base to run.
 
-        A scenario's weight comes from its own contract — whether anything on it can
-        block — rather than from a table of variation counts nobody approved.
+        A base's weight comes from its own contract — whether anything on it can block —
+        rather than from a table of variation counts nobody approved. Its family and
+        answer type come with it, so relevance filtering happens inside the planner.
         """
         if self.catalogue is None:
             return None
-        blocking = {}
+        items = []
         for scenario in self.space.scenarios:
             contract = self.contract_for(scenario.id)
-            blocking[scenario.id] = bool(contract and contract.blocking)
-        return plan(blocking, self.catalogue)
+            items.append(
+                Item(
+                    id=scenario.id,
+                    category=scenario.category,
+                    family=scenario.family,
+                    answer_type=scenario.answer_type,
+                    blocking=bool(contract and contract.blocking),
+                )
+            )
+        return plan(
+            items,
+            self.catalogue,
+            arrangement=self.settings.enrich.arrangement,
+            profile=self.factor_profile,
+            adverse_run=self.settings.enrich.adverse_run,
+        )
 
     @property
     def identity(self) -> str:
@@ -189,7 +246,10 @@ class Workspace:
         reports.write_build(
             self.result, out_dir, decisions=self.decisions, sections=self._sections()
         )
-        _write_json(out_dir / reports.SCENARIOS_FILE, self.space.as_dict())
+        _write_json(
+            out_dir / reports.SCENARIOS_FILE,
+            {**self.space.as_dict(), **self.capabilities, "settings": self.settings.as_dict()},
+        )
         if self.plan is not None:
             _write_json(out_dir / reports.PLAN_FILE, self.plan.as_dict())
         if self.evaluations:
@@ -201,13 +261,25 @@ class Workspace:
     def _sections(self) -> list[str]:
         """What the graph implies and what it found, appended to the build report."""
         space = self.space
+        caps = self.capabilities["capabilities"]
         lines = [
             "## Test space",
             "",
-            f"{len(space.scenarios)} scenarios, "
-            f"{sum(1 for s in space.scenarios if s.origin == 'edge-gap')} of them reaching a "
-            "branch the walk missed.",
+            f"{len(space.scenarios)} bases across {len(space.families)} families, generated "
+            f"from the capabilities this graph exposes: "
+            f"{', '.join(caps['present']) or 'none'}.",
+            "",
+            "| category | bases |",
+            "|---|---|",
+            *(f"| {name} | {count} |" for name, count in space.coverage.items()),
+            "",
         ]
+        lines += [f"- not admissible: {reason}" for reason in space.inadmissible]
+        if space.rejected:
+            lines.append(
+                f"- **{len(space.rejected)} bases failed answer recovery** and were "
+                "quarantined rather than admitted"
+            )
         if space.truncated:
             lines.append("**Enumeration was truncated** — this is a prefix of the space.")
         if space.uncovered:
@@ -219,11 +291,11 @@ class Workspace:
             design = self.plan
             lines += [
                 "",
-                f"{len(design.variants)} runs once enrichment is applied, covering "
-                f"{design.pairs_covered} of {design.pairs_total} level pairs"
-                + ("." if design.complete else " — **incomplete**."),
+                f"{len(design.variants)} runs once enrichment is applied ({design.arrangement}), "
+                f"covering {design.pairs_covered} of {design.pairs_total} pairs any base "
+                "could exercise" + ("." if design.complete else " — **incomplete**."),
             ]
-            lines += [f"- excluded: {note}" for note in design.excluded]
+            lines += [f"- {note}" for note in (*design.notes, *design.excluded)]
 
         if not self.evaluations:
             return ["\n".join(lines)]
@@ -274,11 +346,11 @@ class Workspace:
         self.build()
 
     def _gateway(self) -> Gateway:
-        if self.spec.fixture_path is not None:
-            return FixtureGateway.from_file(self.spec.fixture_path)
-        cache = ResponseCache(root=self.spec.cache_path) if self.spec.cache_path else None
-        if self.spec.replay:
-            if cache is None:
-                raise ValueError("--replay needs a cache directory")
-            return ReplayGateway(cache, config=self.spec.model)
-        return AnthropicGateway(config=self.spec.model, cache=cache)
+        """The model transport, chosen by settings rather than by the call site."""
+        return build_gateway(
+            self.settings.llm,
+            cache_path=self.spec.cache_path,
+            fixture_path=self.spec.fixture_path,
+            replay=self.spec.replay,
+            use_case=self.spec.use_case,
+        )

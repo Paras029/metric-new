@@ -15,12 +15,45 @@ from typing import Any
 import pytest
 
 from metric.ontology.schema import Schema, load_schema
+from metric.ontology.types import Entity, Span, Triple
 from metric.workspace import BuildSpec, Workspace
 
 REPO = Path(__file__).resolve().parents[1]
 POLICY = REPO / "grounding" / "07-card-authentication-policy.md"
 
 _LABEL = re.compile(r"^\[(P\d+)\] \(", re.MULTILINE)
+
+
+def span(passage: str = "pg1") -> Span:
+    return Span(passage_id=passage, start=0, end=5, quote="quote")
+
+
+def triple(
+    head: str,
+    relation: str,
+    tail: str,
+    *,
+    kind: str = "entity",
+    status: str = "admitted",
+) -> Triple:
+    return Triple(
+        head=head,
+        relation=relation,
+        tail=tail,
+        tail_kind=kind,  # type: ignore[arg-type]
+        spans=(span(),),
+        methods=frozenset({"deterministic"}),
+        status=status,  # type: ignore[arg-type]
+    )
+
+
+def entity(entity_id: str, entity_type: str, *, canonical: str = "") -> Entity:
+    return Entity(
+        id=entity_id,
+        type=entity_type,
+        canonical=canonical or entity_id,
+        surfaces=frozenset({canonical or entity_id}),
+    )
 
 
 class ScriptedGateway:

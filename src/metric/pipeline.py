@@ -31,6 +31,7 @@ from metric.llm.gateway import Gateway
 from metric.llm.prompts import prompt_hash
 from metric.ontology.schema import Schema
 from metric.ontology.types import Document, Passage, Question, Rejection
+from metric.settings import Settings
 from metric.telemetry.profile import Profile, apply_profile
 
 
@@ -80,14 +81,17 @@ def ingest(
     decisions: Mapping[str, str] | None = None,
     profile: Profile | None = None,
     observations: Mapping[str, Any] | None = None,
+    settings: Settings | None = None,
 ) -> BuildResult:
     from metric.reconcile.run import reconcile
 
+    active = settings or Settings()
     manifest = Manifest(
         schema_version=f"{schema.name}/{schema.version}",
         prompt_hash=prompt_hash(schema),
         model=gateway.identity,
         code_version=__version__,
+        settings_digest=active.digest,
     )
 
     passages: dict[str, Passage] = {}
@@ -102,7 +106,14 @@ def ingest(
         )
         manifest.add(document)
         _register(found, document, passages=passages, effective_dates=effective_dates)
-        batches.extend(batch_passages(found, title=spec.title))
+        batches.extend(
+            batch_passages(
+                found,
+                title=spec.title,
+                budget_chars=active.corpus.batch_chars,
+                min_chars=active.corpus.min_batch_chars,
+            )
+        )
 
     ordered = sorted(passages.values(), key=lambda p: (p.doc_id, p.location, p.id))
     candidates = list(harvest(ordered))
@@ -111,7 +122,9 @@ def ingest(
     extraction = extract(batches, gateway=gateway, schema=schema, glossary=glossary)
     candidates.extend(extraction.candidates)
 
-    admission = admit(candidates, schema=schema, passages=passages)
+    admission = admit(
+        candidates, schema=schema, passages=passages, settings=active.admission
+    )
     rejections = [*extraction.rejections, *admission.rejections]
     results = extraction.results
 
@@ -121,6 +134,7 @@ def ingest(
         schema=schema,
         effective_dates=effective_dates,
         decisions=decisions,
+        witness=active.witness,
     )
 
     graph = reconciled.graph

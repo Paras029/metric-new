@@ -18,8 +18,9 @@ DEFAULT_MAX_REVISITS = 3
 class Journey:
     """The graph read as a state machine: successors, terminals and revisit limits."""
 
-    def __init__(self, graph: Graph) -> None:
+    def __init__(self, graph: Graph, *, default_revisits: int = DEFAULT_MAX_REVISITS) -> None:
         self.graph = graph
+        self.default_revisits = default_revisits
         self.terminals = frozenset(
             t.head for t in graph.by_relation("IS_TERMINAL") if t.tail.strip().lower() == "true"
         )
@@ -40,9 +41,10 @@ class Journey:
         return tuple(sorted(states - reached)) or tuple(sorted(states))
 
     def limit(self, state: str) -> int:
-        return self._limits.get(state, DEFAULT_MAX_REVISITS)
+        return self._limits.get(state, self.default_revisits)
 
-    def category(self, state: str) -> str:
+    def ends_as(self, state: str) -> str:
+        """The class of ending a state represents, where the policy declares one."""
         declared = self.graph.out(state, "HAS_OUTCOME_TYPE")
         return declared[0].tail if declared else ""
 

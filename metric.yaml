@@ -1,0 +1,86 @@
+# Every tunable in the pipeline, in one file.
+#
+# Picked up automatically when it sits beside the corpus, or named by `settings:` in the
+# corpus file. Every value below is the default, so deleting this file changes nothing —
+# it is here to be read as much as to be edited.
+#
+# The whole of it is hashed into build identity. Two builds that used different settings
+# are different builds and say so, the same rule the schema, the prompts and the model
+# already follow.
+
+corpus:
+  # Batches are cut by content size, never by relation type: each batch is asked for
+  # everything it contains, once. Raising this saves calls and costs recall on long
+  # batches; lowering it does the reverse.
+  batch_chars: 6000
+  # A section boundary is only worth cutting at once the batch is this full.
+  min_batch_chars: 1500
+  # A line repeated this often across pages is furniture, not content.
+  furniture_min_repeats: 3
+  furniture_max_chars: 90
+  # Passages of context given on each side of a batch, for pronouns and carry-over.
+  context_passages: 1
+
+admission:
+  # A quote shorter than this cannot locate a span unambiguously.
+  min_quote_chars: 8
+  # Ordered after the quote is located: does the source state this, or deny it?
+  check_polarity: true
+  # A relation whose range is a literal must actually carry one.
+  check_value: true
+  # "three attempts" supports a threshold of 3.
+  numeric_word_tolerance: true
+
+witness:
+  # A high-materiality fact resting on a single passage goes to review rather than
+  # straight into the graph, and cannot block until a person approves it.
+  #
+  # Turning this off removes the review queue's reason to exist. It is here because some
+  # corpora are already human-authored and reviewed, not because it is a knob to reach
+  # for when the queue is long.
+  enabled: true
+  materiality: high
+  min_passages: 2
+
+scenario:
+  max_depth: 12
+  max_paths: 500
+  # How often a state may recur when the policy states no threshold of its own.
+  default_revisits: 3
+  # After a truncated walk, go back for each branch it missed. The branches a budget
+  # cuts are the deep ones — retries, fallbacks, escalations — which is the wrong half
+  # to lose.
+  reach_for_uncovered: true
+
+binding:
+  # Placing a turn the agent did not place itself. Turning both off grades only what the
+  # agent narrated: stricter, smaller, and defensible for a first deployment.
+  allow_inference: true
+  allow_carry: true
+  # Only `checkpoint` can fail an agent, whatever these say.
+  confidence:
+    checkpoint: 1.0
+    inferred: 0.8
+    carried: 0.6
+    ambiguous: 0.4
+    none: 0.0
+
+llm:
+  # anthropic — the vendor SDK directly
+  # safechain — the bank's model gateway; the only edit needed to deploy inside AXP
+  # replay    — cache only, a miss is an error
+  # fixture   — a recorded extraction named by the corpus
+  provider: anthropic
+  model: claude-opus-5
+  effort: high
+  max_tokens: 16000
+  cache: .metric/llm-cache
+
+enrich:
+  # crossed  — every base against the full covering array; exhaustive per base
+  # embedded — the base as a balanced blocking factor; fixed suite size, attributable
+  #            to the base itself, and no base sees the whole array
+  arrangement: crossed
+  # One extra run at every factor's hardest level, for bases whose contract can block.
+  adverse_run: true
+  seed: 0
