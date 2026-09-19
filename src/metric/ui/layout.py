@@ -189,7 +189,9 @@ def _edge_label(
 
 
 def _node(node: Node) -> str:
-    stroke = "currentColor"
+    # The ending is the thing a reader looks for first, so it is the one place in the
+    # diagram that is not monochrome.
+    stroke = "var(--seal)" if node.terminal else "currentColor"
     weight = "2" if node.terminal or node.entry else "1"
     dash = " stroke-dasharray='3 3'" if node.entry and not node.terminal else ""
     title = escape("\n".join(node.rules)) if node.rules else ""
@@ -206,7 +208,8 @@ def _node(node: Node) -> str:
     return (
         f"<g><title>{title}</title>"
         f"<rect x='{node.x:.0f}' y='{node.y:.0f}' width='{BOX_W:.0f}' height='{BOX_H:.0f}' "
-        f"rx='8' fill='none' stroke='{stroke}' stroke-width='{weight}' opacity='.55'{dash}/>"
+        f"rx='8' fill='none' stroke='{stroke}' stroke-width='{weight}' "
+        f"opacity='{'.9' if node.terminal else '.5'}'{dash}/>"
         f"{badge}"
         f"{_label(node)}</g>"
     )

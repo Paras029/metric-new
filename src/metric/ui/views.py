@@ -24,7 +24,7 @@ from metric.ontology.types import Entity, Question, Rejection, Span, Triple
 from metric.review import outstanding
 from metric.scenario.model import Scenario
 from metric.ui import html, layout
-from metric.ui.html import chip, panel, quote, stats, table, tone
+from metric.ui.html import chip, figures, panel, quote, stats, table, tone
 from metric.workspace import Workspace
 
 
@@ -36,15 +36,30 @@ def overview(space: Workspace) -> str:
 
     body = [
         "<h1>Build overview</h1>",
-        stats(
+        figures(
             [
-                ("entities", len(graph.entities)),
-                ("admitted triples", statuses.get("admitted", 0)),
-                ("awaiting review", statuses.get("review", 0)),
-                ("quarantined", len(result.rejections)),
-                ("bases", len(space.space.scenarios)),
-                ("runs planned", len(space.plan.variants) if space.plan else "—"),
-                ("open questions", len(open_questions)),
+                (
+                    "the graph",
+                    [
+                        ("facts admitted", statuses.get("admitted", 0)),
+                        ("entities", len(graph.entities)),
+                        ("quarantined", len(result.rejections)),
+                    ],
+                ),
+                (
+                    "!waiting on a person",
+                    [
+                        ("open questions", len(open_questions)),
+                        ("facts held for review", statuses.get("review", 0)),
+                    ],
+                ),
+                (
+                    "the test space",
+                    [
+                        ("bases", len(space.space.scenarios)),
+                        ("runs planned", len(space.plan.variants) if space.plan else "—"),
+                    ],
+                ),
             ]
         ),
     ]
@@ -165,9 +180,31 @@ def graph_view(space: Workspace, *, relation: str = "", status: str = "") -> str
             "only until confirmed.</p>",
             f"<div class='panel'>{filters}</div>",
             note,
-            table(["subject", "relation", "object", "status", "how", "evidence"], rows),
+            table(
+                ["subject", "relation", "object", "status", "how", "evidence"],
+                rows,
+                rails=[rail(t.status) for t in triples[:400]],
+            ),
         ]
     )
+
+
+RAILS = {
+    "admitted": "met",
+    "review": "held",
+    "conflicted": "out",
+    "rejected": "idle",
+    "superseded": "idle",
+    "pass": "met",
+    "fail": "out",
+    "undecided": "held",
+    "not_applicable": "idle",
+}
+
+
+def rail(value: str) -> str:
+    """Which standing a row has, for the vertical line down the left of a table."""
+    return RAILS.get(value, "")
 
 
 def _name(entity: Entity) -> str:
@@ -319,7 +356,11 @@ def scenarios(space: Workspace) -> str:
             _capability_panel(space),
             panel("Coverage", "".join(gaps)),
             _variants_panel(space),
-            table(["id", "category", "family", "situation", "where", "answer"], rows),
+            table(
+                ["id", "category", "family", "situation", "where", "answer"],
+                rows,
+                rails=["met" if s.checked else "held" for s in found.scenarios],
+            ),
         ]
     )
 
@@ -532,7 +573,7 @@ def questions(space: Workspace) -> str:
         rows = [
             [
                 escape(q.heading),
-                f"<p class='lede' style='margin:0'>{escape(q.detail)}</p>"
+                f"<p class='lede detail' style='margin:0'>{escape(q.detail)}</p>"
                 + "".join(quote(span.quote) for span in q.evidence[:2]),
                 _answer_form(q.id),
             ]
@@ -736,13 +777,18 @@ def _assertions(space: Workspace, assertions: tuple[Assertion, ...]) -> str:
 def _evidence(space: Workspace, spans: tuple[Span, ...]) -> str:
     if not spans:
         return "<span class='empty'>—</span>"
+    # Inside a table cell the source stays in the serif but sized to the row, so the
+    # evidence is still distinguishable as the document's voice without breaking the
+    # line rhythm. Clicking opens it in place, where it is set full size.
     links = []
     for span in spans[:3]:
         href = f"/passage/{urlquote(span.passage_id)}?start={span.start}&end={span.end}"
         links.append(
-            f"<a href='{href}' title='{escape(span.quote)}'>{escape(_clip(span.quote))}</a>"
+            f"<a href='{href}' title='{escape(span.quote)}' "
+            "style='font-family:var(--serif);color:var(--ink)'>"
+            f"{escape(_clip(span.quote))}</a>"
         )
-    more = f" +{len(spans) - 3}" if len(spans) > 3 else ""
+    more = f" <span class='mono'>+{len(spans) - 3}</span>" if len(spans) > 3 else ""
     return "<br>".join(links) + more
 
 

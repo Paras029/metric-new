@@ -126,7 +126,7 @@ synthetic benchmark drifting away from production evaluation.
 | `accuracy.py` | is the graph right? precision and recall against a human reading |
 | `refine/` | names that read as names, and rules that assert nothing |
 | `settings.py` | every tunable, hashed into build identity |
-| `ui/` | the pages, stdlib server, SVG workflow layout |
+| `ui/` | the pages, stdlib server, SVG workflow layout. Three type voices: sans is the tool speaking, **serif is only ever the source document's own words**, mono is the record. No font is fetched — an internal network usually cannot reach a font host |
 
 The load-bearing ideas, each with the failure it prevents:
 
